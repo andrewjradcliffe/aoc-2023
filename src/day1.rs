@@ -32,8 +32,6 @@ where
 }
 
 pub mod part1 {
-    // use super::*;
-
     fn decimal(c: char) -> Option<u8> {
         c.to_digit(10).map(|d| d as u8)
     }
@@ -48,8 +46,8 @@ pub mod part1 {
 
     #[cfg(test)]
     mod tests {
-        use super::*;
         use super::super::*;
+        use super::*;
 
         // Equivalent, but potentially slower due to more branching
         fn parse_line2(line: &str) -> u8 {
@@ -134,7 +132,7 @@ pub mod part2 {
 
     fn char1_matches_rev(s: &str) -> bool {
         match s {
-            "e" | "o" | "r" | "x" | "n" | "t"  => true,
+            "e" | "o" | "r" | "x" | "n" | "t" => true,
             _ => false,
         }
     }
@@ -164,95 +162,9 @@ pub mod part2 {
         }
     }
 
-    fn first_last(line: &str) -> (Option<u8>, Option<u8>) {
-        let mut iter = line.char_indices();
-        let mut first: Option<u8> = None;
-        let mut last: Option<u8> = None;
-
-        let mut assign = |d: u8| {
-            if first.is_none() {
-                first = Some(d);
-            } else {
-                last = Some(d);
-            }
-        };
-        let mut left: usize = 0;
-        while let Some((i, c)) = iter.next() {
-            let right = i + 1;
-            if let Some(d) = c.to_digit(10).map(|d| d as u8) {
-                assign(d);
-                left = i + 1;
-            } else {
-                let mut size = right - left;
-                loop {
-                    if size == 6 {
-                        left += 1;
-                        size = right - left;
-                    } else if size == 5 {
-                        match line.get(left..right).and_then(char5) {
-                            Some(d) => {
-                                assign(d);
-                                left = right;
-                            }
-                            _ => {
-                                left += 1;
-                            }
-                        }
-                        size = right - left;
-                    } else if size == 4 {
-                        match line.get(left..right).and_then(char4) {
-                            Some(Ok(d)) => {
-                                assign(d);
-                                left = right;
-                            }
-                            Some(Err(())) => {
-                                break;
-                            }
-                            _ => {
-                                left += 1;
-                            }
-                        }
-                        size = right - left;
-                    } else if size == 3 {
-                        match line.get(left..right).and_then(char3) {
-                            Some(Ok(d)) => {
-                                assign(d);
-                                left = right;
-                            }
-                            Some(Err(())) => {
-                                break;
-                            }
-                            _ => {
-                                left += 1;
-                            }
-                        }
-                        size = right - left;
-                    } else if size == 2 {
-                        if line.get(left..right).is_some_and(char2_matches) {
-                            break;
-                        } else {
-                            left += 1;
-                            size = right - left;
-                        }
-                    } else if size == 1 {
-                        if line.get(left..right).is_some_and(char1_matches) {
-                            break;
-                        } else {
-                            left += 1;
-                            size = right - left;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
-        (first, last)
-    }
     fn first(line: &str) -> Option<u8> {
-        let mut iter = line.char_indices();
         let mut left: usize = 0;
-        while let Some((i, c)) = iter.next() {
+        for (i, c) in line.char_indices() {
             let right = i + 1;
             if let Some(d) = c.to_digit(10).map(|d| d as u8) {
                 return Some(d);
@@ -315,9 +227,10 @@ pub mod part2 {
         None
     }
     fn last(line: &str) -> Option<u8> {
-        let mut iter = line.char_indices().rev();
+        // This valid for UTF-8; if we assume ASCII, then `line.len() + 1`.
         let mut right: usize = line.chars().count() + 1;
-        while let Some((i, c)) = iter.next() {
+
+        for (i, c) in line.char_indices().rev() {
             let left = i;
             if let Some(d) = c.to_digit(10).map(|d| d as u8) {
                 return Some(d);
@@ -380,10 +293,7 @@ pub mod part2 {
         None
     }
 
-
     pub fn parse_line(line: &str) -> u8 {
-        // let first = first(line);
-        // let (first, last) = first_last(line);
         let first = first(line);
         let last = last(line);
         match (first, last) {
@@ -395,8 +305,8 @@ pub mod part2 {
 
     #[cfg(test)]
     mod tests {
-        use super::*;
         use super::super::*;
+        use super::*;
 
         #[test]
         fn parse_line_works() {
@@ -407,13 +317,16 @@ pub mod part2 {
             assert_eq!(parse_line("4nineeightseven2"), 42);
             assert_eq!(parse_line("zoneight234"), 14);
             assert_eq!(parse_line("7pqrstsixteen"), 76);
-            assert_eq!(parse_line("bqccqhbdgeight7"),  87);
+            assert_eq!(parse_line("bqccqhbdgeight7"), 87);
             assert_eq!(parse_line("t1"), 11);
             assert_eq!(parse_line("gckhqpb6twoqnjxqplthree2fourkspnsnzxlz1"), 61);
             assert_eq!(parse_line("fmpvqkxgeightthreebdrng9tdcffvsfctwo"), 82);
             assert_eq!(parse_line("sevenlptpdhtjpgxconedvtrrnngn8"), 78);
             assert_eq!(parse_line("threeznnnbtfive5tmdfxtwothree3ndjcszrb"), 33);
-            assert_eq!(parse_line("kkvtwone5sevenfcfnngpmjktrpxk7djgzmdthreehpp"), 23);
+            assert_eq!(
+                parse_line("kkvtwone5sevenfcfnngpmjktrpxk7djgzmdthreehpp"),
+                23
+            );
             assert_eq!(parse_line("24"), 24);
             assert_eq!(parse_line("oneninexqdseven4threefive"), 15);
             assert_eq!(parse_line("fcsoneightnmtgzbbnflnnlk5two"), 12);

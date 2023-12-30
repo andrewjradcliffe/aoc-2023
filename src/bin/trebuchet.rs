@@ -13,7 +13,7 @@ fn main() {
                 Ok(x) => println!("{}", x),
                 Err(e) => println!("{:?}", e),
             }
-        },
+        }
         _ => println!("Please provide input file as first argument"),
     }
 }
