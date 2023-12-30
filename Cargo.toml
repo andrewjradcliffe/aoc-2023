@@ -8,3 +8,7 @@ repository = "https://github.com/andrewjradcliffe/aoc-2023/"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+
+
+[profile.release]
+lto = true
