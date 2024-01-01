@@ -13,24 +13,14 @@ impl Number {
         Self { value, pos }
     }
 
-    pub fn is_adjacent_prev_curr(&self, current: usize) -> bool {
-        self.pos.start == current + 1 || self.pos.end == current || self.pos.contains(&current)
-        // self.pos.start == current || self.pos.start == current + 1 || self.pos.end == current || self.pos.end - 1 == current
+    /// Other row means immediately above or below, i.e. if the row index is `i`, then either `i - 1` or `i + 1`
+    pub fn is_adjacent_other_row(&self, j: usize) -> bool {
+        self.pos.start == j + 1 || self.pos.end == j || self.pos.contains(&j)
+        // self.pos.start == j + 1 || self.pos.start == j || self.pos.end - 1 == j || self.pos.end == j
     }
-    pub fn is_adjacent_curr_curr(&self, current: usize) -> bool {
-        self.pos.start == current + 1 || self.pos.end == current
+    pub fn is_adjacent_same_row(&self, j: usize) -> bool {
+        self.pos.start == j + 1 || self.pos.end == j
     }
-    // pub fn is_adjacent_curr_prev(&self, prev: usize) -> bool {
-    //     if self.pos.contains(&prev) {
-    //         true
-    //     } else if self.pos.end == prev {
-    //         true
-    //     } else if self.pos.start != 0 && self.pos.start - 1 == prev {
-    //         true
-    //     } else {
-    //         false
-    //     }
-    // }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,8 +45,8 @@ impl Scan {
                 let mut right = i + 1;
                 while let Some((i, c)) = iter.next() {
                     if c.is_ascii_digit() {
-                        val = val * 10 + c as u32 - OFFSET;
-                        right = i + 1;
+                        val = val * 10 + (c as u32 - OFFSET);
+                        right += 1;
                     } else {
                         if c != '.' {
                             self.curr_syms.push(i);
@@ -75,7 +65,7 @@ impl Scan {
         // Previous numbers against current symbols
         while let Some(num) = self.prev_nums.pop() {
             for sym in self.curr_syms.iter() {
-                if num.is_adjacent_prev_curr(*sym) {
+                if num.is_adjacent_other_row(*sym) {
                     self.sum += num.value;
                     break;
                 }
@@ -84,13 +74,13 @@ impl Scan {
         // Eliminate any current numbers against previous symbols and current symbols
         'outer: while let Some(num) = self.curr_nums.pop() {
             for sym in self.prev_syms.iter() {
-                if num.is_adjacent_prev_curr(*sym) {
+                if num.is_adjacent_other_row(*sym) {
                     self.sum += num.value;
                     continue 'outer;
                 }
             }
             for sym in self.curr_syms.iter() {
-                if num.is_adjacent_curr_curr(*sym) {
+                if num.is_adjacent_same_row(*sym) {
                     self.sum += num.value;
                     continue 'outer;
                 }
