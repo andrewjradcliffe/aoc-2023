@@ -8,6 +8,8 @@ fn main() {
             match games_from_file(path) {
                 Ok(games) => {
                     println!("{}", sum_possible(&games, 12, 13, 14));
+                    println!("{}", sum_powerset(&games));
+                    println!("{}", sum_powerset_incl_null_set(&games));
                 },
                 Err(e) => println!("{:?}", e),
             }

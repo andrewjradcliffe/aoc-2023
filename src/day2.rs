@@ -12,10 +12,14 @@ pub struct Game {
 
 impl Game {
     fn is_possible(&self, red: u8, green: u8, blue: u8) -> bool {
-        let (r, g, b) = self.draws.iter().fold((0, 0, 0), |(r, g, b), Draw{red, green, blue}| {
-            (r.max(*red), g.max(*green), b.max(*blue))
-        });
+        let (r, g, b) = self.maximum_cubes();
         r <= red && g <= green && b <= blue
+    }
+
+    fn maximum_cubes(&self) -> (u8, u8, u8) {
+        self.draws.iter().fold((0, 0, 0), |(r, g, b), Draw{red, green, blue}| {
+            (r.max(*red), g.max(*green), b.max(*blue))
+        })
     }
 }
 
@@ -108,6 +112,36 @@ pub fn sum_possible(games: &[Game], red: u8, green: u8, blue: u8) -> u32 {
         game.id
     }).sum()
 }
+
+pub fn sum_powerset(games: &[Game]) -> u32 {
+    games.into_iter().map(|game| {
+        let (r, g, b) = game.maximum_cubes();
+        r as u32 * g as u32 * b as u32
+    }).sum()
+}
+
+/*
+The number of possible game outcomes accepted by AoC is not correct, at least,
+in the sense that the "power" is not really the powerset since the empty set
+(i.e. 0 cubes) is an acceptable choice for each color.
+
+If the minimum number of cubes (required to generate the game outcomes) for each
+type (color) is `n_i`, and it is permissible to choose on an arbitrary number of cubes
+per type, then this is equivalent to having `n_i + 1` permissible states for each type.
+Hence, the total possible outcomes for a given game setup is `∏ n_i + 1`
+(where the product runs over `i`).
+
+N.B. the prompt does not actually say that the value computed is the number of possible
+game outcomes, but it would likely be more informative to change the problem
+to require the logic above.
+*/
+pub fn sum_powerset_incl_null_set(games: &[Game]) -> u32 {
+    games.into_iter().map(|game| {
+        let (r, g, b) = game.maximum_cubes();
+        (r + 1) as u32 * (g + 1) as u32 * (b + 1) as u32
+    }).sum()
+}
+
 
 pub fn games_from_file<T: AsRef<Path>>(path: T) -> Result<Vec<Game>, SumError> {
     let f = File::open(path.as_ref())?;
