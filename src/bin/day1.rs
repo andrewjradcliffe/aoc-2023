@@ -1,4 +1,4 @@
-use aoc_2023::day1::{parse_file, part1, part2};
+use aoc_2023::day1::{parse_file, part1, part2, part2_alt};
 use std::env;
 
 fn main() {
@@ -10,6 +10,10 @@ fn main() {
                 Err(e) => println!("{:?}", e),
             }
             match parse_file(part2::parse_line, path) {
+                Ok(x) => println!("{}", x),
+                Err(e) => println!("{:?}", e),
+            }
+            match parse_file(part2_alt::parse_line, path) {
                 Ok(x) => println!("{}", x),
                 Err(e) => println!("{:?}", e),
             }
