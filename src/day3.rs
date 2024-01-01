@@ -1,7 +1,7 @@
-use std::ops::Range;
 use std::fs::File;
+use std::io::{self, BufRead, BufReader};
+use std::ops::Range;
 use std::path::Path;
-use std::io::{self, BufReader, BufRead};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Number {
@@ -14,24 +14,11 @@ impl Number {
     }
 
     pub fn is_adjacent_prev_curr(&self, current: usize) -> bool {
-        if self.pos.contains(&current) {
-            true
-        } else if self.pos.end == current {
-            true
-        } else if self.pos.start != 0 && self.pos.start - 1 == current {
-            true
-        } else {
-            false
-        }
+        self.pos.start == current + 1 || self.pos.end == current || self.pos.contains(&current)
+        // self.pos.start == current || self.pos.start == current + 1 || self.pos.end == current || self.pos.end - 1 == current
     }
     pub fn is_adjacent_curr_curr(&self, current: usize) -> bool {
-        if self.pos.end == current {
-            true
-        } else if self.pos.start != 0 && self.pos.start - 1 == current {
-            true
-        } else {
-            false
-        }
+        self.pos.start == current + 1 || self.pos.end == current
     }
     // pub fn is_adjacent_curr_prev(&self, prev: usize) -> bool {
     //     if self.pos.contains(&prev) {
@@ -60,18 +47,20 @@ const OFFSET: u32 = '0' as u32;
 impl Scan {
     pub fn consume_line(&mut self, s: &str) {
         // Acquire the current (from this line) numbers and symols
-        let mut iter = s.char_indices().peekable();
+        let mut iter = s.char_indices();
         while let Some((i, c)) = iter.next() {
             if c.is_ascii_digit() {
                 let mut val = c as u32 - OFFSET;
                 let left = i;
                 let mut right = i + 1;
-                while let Some((_, c)) = iter.peek() {
+                while let Some((i, c)) = iter.next() {
                     if c.is_ascii_digit() {
-                        let (i, c) = iter.next().unwrap();
                         val = val * 10 + c as u32 - OFFSET;
                         right = i + 1;
                     } else {
+                        if c != '.' {
+                            self.curr_syms.push(i);
+                        }
                         break;
                     }
                 }
@@ -94,14 +83,14 @@ impl Scan {
         }
         // Eliminate any current numbers against previous symbols and current symbols
         'outer: while let Some(num) = self.curr_nums.pop() {
-            for sym in self.curr_syms.iter() {
-                if num.is_adjacent_curr_curr(*sym) {
+            for sym in self.prev_syms.iter() {
+                if num.is_adjacent_prev_curr(*sym) {
                     self.sum += num.value;
                     continue 'outer;
                 }
             }
-            for sym in self.prev_syms.iter() {
-                if num.is_adjacent_prev_curr(*sym) {
+            for sym in self.curr_syms.iter() {
+                if num.is_adjacent_curr_curr(*sym) {
                     self.sum += num.value;
                     continue 'outer;
                 }
@@ -153,7 +142,10 @@ mod tests {
         let mut scan = Scan::new();
         let s = "467..114..";
         scan.consume_line(s);
-        assert_eq!(scan.prev_nums, vec![Number::new(114, 5..8), Number::new(467, 0..3)]);
+        assert_eq!(
+            scan.prev_nums,
+            vec![Number::new(114, 5..8), Number::new(467, 0..3)]
+        );
         assert_eq!(scan.prev_syms, vec![]);
         assert_eq!(scan.curr_nums, vec![]);
         assert_eq!(scan.curr_syms, vec![]);
