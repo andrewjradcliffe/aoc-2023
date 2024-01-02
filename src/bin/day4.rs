@@ -6,8 +6,10 @@ fn main() {
     match args.nth(1) {
         Some(path) => match cards_from_file(path) {
             Ok(cards) => {
-                let points = cards.iter().map(|x| x.points()).sum::<u64>();
+                let points = sum_points(&cards);
                 println!("{}", points);
+                let count = count(&cards);
+                println!("{}", count);
             }
             Err(e) => println!("{:#?}", e),
         },

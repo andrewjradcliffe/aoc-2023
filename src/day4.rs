@@ -6,22 +6,38 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Card {
-    id: u32,
+    id: usize,
     winning: Vec<u32>,
     have: Vec<u32>,
+    win_count: usize,
 }
 impl Card {
+    pub fn new(id: usize, winning: Vec<u32>, have: Vec<u32>) -> Self {
+        let win_count = have.iter().filter(|x| winning.contains(x)).count();
+        Self {
+            id,
+            winning,
+            have,
+            win_count,
+        }
+    }
     pub fn points(&self) -> u64 {
-        let n = self
-            .have
-            .iter()
-            .filter(|x| self.winning.contains(x))
-            .count();
+        let n = self.win_count as usize;
         if n == 0 {
             0
         } else {
             1 << (n - 1)
         }
+    }
+
+    pub fn count_copies(&self, cards: &[Card]) -> usize {
+        (self.id..self.id + self.win_count)
+            .map(|i| {
+                let card = &cards[i];
+                card.count_copies(cards)
+            })
+            .sum::<usize>()
+            + 1
     }
 }
 
@@ -50,7 +66,7 @@ impl FromStr for Card {
             let mut iter = lhs.split_whitespace();
             iter.next();
             if let Some(id) = iter.next() {
-                let id = id.parse::<u32>()?;
+                let id = id.parse::<usize>()?;
                 if let Some((winning, have)) = rhs.split_once('|') {
                     let mut w = Vec::new();
                     for num in winning.trim().split_whitespace() {
@@ -60,11 +76,7 @@ impl FromStr for Card {
                     for num in have.trim().split_whitespace() {
                         h.push(num.parse::<u32>()?);
                     }
-                    Ok(Card {
-                        id,
-                        winning: w,
-                        have: h,
-                    })
+                    Ok(Card::new(id, w, h))
                 } else {
                     Err(Self::Err::Other(s.to_string()))
                 }
@@ -98,6 +110,14 @@ pub fn cards_from_file<T: AsRef<Path>>(path: T) -> Result<Vec<Card>, AcquireErro
     Ok(cards)
 }
 
+pub fn count(cards: &[Card]) -> usize {
+    cards.iter().map(|card| card.count_copies(cards)).sum()
+}
+
+pub fn sum_points(cards: &[Card]) -> u64 {
+    cards.iter().map(Card::points).sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,15 +137,22 @@ Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11";
         assert_eq!(card.id, 1);
         assert_eq!(card.winning, vec![41, 48, 83, 86, 17]);
         assert_eq!(card.have, vec![83, 86, 6, 31, 17, 9, 48, 53]);
+        assert_eq!(card.win_count, 4);
     }
 
     #[test]
     fn points() {
-        let card = Card {
-            id: 1,
-            winning: vec![41, 48, 83, 86, 17],
-            have: vec![83, 86, 6, 31, 17, 9, 48, 53],
-        };
+        let card = Card::new(
+            1,
+            vec![41, 48, 83, 86, 17],
+            vec![83, 86, 6, 31, 17, 9, 48, 53],
+        );
         assert_eq!(card.points(), 8);
+    }
+
+    #[test]
+    fn count_copies_works() {
+        let cards: Vec<_> = TEST.lines().map(|s| s.parse::<Card>().unwrap()).collect();
+        assert_eq!(count(&cards), 30);
     }
 }
