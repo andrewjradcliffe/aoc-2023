@@ -210,20 +210,59 @@ impl FromStr for Map {
 }
 
 impl Map {
-    pub fn new(ranges: Vec<SrcDst>, src: Garden, dst: Garden) -> Self {
+    pub fn new(mut ranges: Vec<SrcDst>, src: Garden, dst: Garden) -> Self {
+        // Sorting is a necessary condition to use binary search in `lookup`
+        ranges.sort_unstable_by(|a, b| a.src.cmp(&b.src));
         Self { ranges, src, dst }
     }
+
+    /*
+    With O(n) lookup:
+
+    time ./target/release/day5 ./input/day5.txt
+    579439039
+    7873084
+
+    real	1m51.358s
+    user	1m51.169s
+    sys	0m0.001s
+
+    ----
+
+    With O(lgn) lookup:
+
+    time ./target/release/day5 ./input/day5.txt
+    579439039
+    7873084
+
+    real	1m11.060s
+    user	1m10.729s
+    sys	0m0.005s
+    */
     pub fn lookup(&self, i: usize) -> usize {
-        // With a bit more effort, this could be converted to a binary search,
-        // hence, O(lgn) rather than O(n).
-        for srcdst in self.ranges.iter() {
-            match srcdst.lookup(i) {
-                Some(x) => return x,
-                None => (),
-            }
+        match self.ranges.binary_search_by(|x| x.src.cmp(&i)) {
+            Ok(mid) => match self.ranges[mid].lookup(i) {
+                Some(j) => j,
+                None => i,
+            },
+            Err(0) => i,
+            Err(left) => match self.ranges[left - 1].lookup(i) {
+                Some(j) => j,
+                None => i,
+            },
         }
-        i
     }
+    // pub fn lookup(&self, i: usize) -> usize {
+    //     // With a bit more effort, this could be converted to a binary search,
+    //     // hence, O(lgn) rather than O(n).
+    //     for srcdst in self.ranges.iter() {
+    //         match srcdst.lookup(i) {
+    //             Some(x) => return x,
+    //             None => (),
+    //         }
+    //     }
+    //     i
+    // }
 
     pub fn has_src_dst(&self, src: &Garden, dst: &Garden) -> bool {
         self.src == *src && self.dst == *dst
@@ -347,14 +386,18 @@ impl<T: Relation> Map2<T> {
     pub fn new(ranges: Vec<SrcDst>, _marker: T) -> Self {
         Self { ranges, _marker }
     }
-    fn lookup_imp(&self, i: usize) -> usize {
-        for srcdst in self.ranges.iter() {
-            match srcdst.lookup(i) {
-                Some(x) => return x,
-                None => (),
-            }
+    pub fn lookup_imp(&self, i: usize) -> usize {
+        match self.ranges.binary_search_by(|x| x.src.cmp(&i)) {
+            Ok(mid) => match self.ranges[mid].lookup(i) {
+                Some(j) => j,
+                None => i,
+            },
+            Err(0) => i,
+            Err(left) => match self.ranges[left - 1].lookup(i) {
+                Some(j) => j,
+                None => i,
+            },
         }
-        i
     }
 }
 
@@ -562,8 +605,8 @@ humidity-to-location map:
         assert_eq!(map.lookup(99), 51);
         assert_eq!(map.lookup(100), 100);
 
-        let map = Map {
-            ranges: vec![
+        let map = Map::new(
+            vec![
                 SrcDst {
                     src: 18,
                     dst: 88,
@@ -575,9 +618,9 @@ humidity-to-location map:
                     len: 70,
                 },
             ],
-            src: Garden::Water,
-            dst: Garden::Light,
-        };
+            Garden::Water,
+            Garden::Light,
+        );
         assert_eq!(map.lookup(81), 74);
     }
 
