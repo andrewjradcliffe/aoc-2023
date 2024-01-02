@@ -5,7 +5,10 @@ fn main() {
     let mut args = env::args();
     match args.nth(1) {
         Some(path) => match Almanac::from_path(path) {
-            Ok(x) => println!("{}", x.minimum_location()),
+            Ok(x) => {
+                println!("{}", x.minimum_location_part1());
+                println!("{}", x.minimum_location_part2());
+            }
             Err(e) => println!("{:#?}", e),
         },
         None => println!("Please provide path to file as first argument"),

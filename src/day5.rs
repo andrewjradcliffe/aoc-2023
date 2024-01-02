@@ -89,11 +89,32 @@ impl Almanac {
         self.humidity_to_location.lookup(humidity)
     }
 
-    pub fn locations(&self) -> impl Iterator<Item = usize> + '_ {
+    pub fn locations_part1(&self) -> impl Iterator<Item = usize> + '_ {
         self.seeds.iter().map(|&seed| self.location(seed))
     }
-    pub fn minimum_location(&self) -> usize {
-        self.locations().fold(usize::MAX, |acc, x| acc.min(x))
+
+    pub fn minimum_location<'a, F, T>(&'a self, f: F) -> usize
+    where
+        F: Fn(&'a Almanac) -> T,
+        T: Iterator<Item = usize> + 'a,
+    {
+        f(&self).fold(usize::MAX, |acc, x| acc.min(x))
+    }
+
+    pub fn minimum_location_part1(&self) -> usize {
+        self.minimum_location(|x| x.locations_part1())
+    }
+
+    pub fn locations_part2(&self) -> impl Iterator<Item = usize> + '_ {
+        assert_eq!(self.seeds.len() & 1, 0);
+        self.seeds.chunks_exact(2).flat_map(|w| {
+            let start = w[0];
+            let len = w[1];
+            (start..start + len).map(|seed| self.location(seed))
+        })
+    }
+    pub fn minimum_location_part2(&self) -> usize {
+        self.minimum_location(|x| x.locations_part2())
     }
 
     pub fn from_path<T: AsRef<Path>>(path: T) -> Result<Self, String> {
@@ -400,9 +421,21 @@ seed-to-soil map:
     }
 
     #[test]
-    fn locations() {
+    fn locations_part1() {
         let x = TEST.parse::<Almanac>().unwrap();
-        let lhs: Vec<_> = x.locations().collect();
+        let lhs: Vec<_> = x.locations_part1().collect();
         assert_eq!(lhs, vec![82, 43, 86, 35]);
+    }
+
+    #[test]
+    fn minimum_location_part1() {
+        let x = TEST.parse::<Almanac>().unwrap();
+        assert_eq!(x.minimum_location_part1(), 35);
+    }
+
+    #[test]
+    fn minimum_location_part2() {
+        let x = TEST.parse::<Almanac>().unwrap();
+        assert_eq!(x.minimum_location_part2(), 46);
     }
 }
