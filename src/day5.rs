@@ -186,39 +186,6 @@ pub struct Map {
     dst: Garden,
 }
 
-// pub struct Map2<T: Relation> {
-//     ranges: Vec<SrcDst>,
-//     relation: T,
-// }
-
-// pub trait Relation {}
-
-// pub struct SeedSoil;
-// pub struct SoilFertilizer;
-// pub struct FertilizerWater;
-// pub struct WaterLight;
-// pub struct LightTemperature;
-// pub struct TemperatureHumidity;
-// pub struct HumidityLocation;
-
-// macro_rules! impl_relation {
-//     { $($T:ident)+ } => {
-//         $( impl Relation for $T {} )+
-//     }
-// }
-// impl_relation! { SeedSoil SoilFertilizer FertilizerWater WaterLight LightTemperature TemperatureHumidity HumidityLocation }
-
-// pub struct Almanac2 {
-//     seeds: Vec<usize>,
-//     seed_to_soil: Map2<SeedSoil>,
-//     soil_to_fertilizer: Map2<SoilFertilizer>,
-//     fertilizer_to_water: Map2<FertilizerWater>,
-//     water_to_light: Map2<WaterLight>,
-//     light_to_temperature: Map2<LightTemperature>,
-//     temperature_to_humidity: Map2<TemperatureHumidity>,
-//     humidity_to_location: Map2<HumidityLocation>,
-// }
-
 impl FromStr for Map {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -297,6 +264,222 @@ impl SrcDst {
         } else {
             Some(self.dst + j)
         }
+    }
+}
+
+/*
+We can take a different approach and move some of the run-time checks into typestate.
+
+This is much work little difference here, but, in general, can be quite useful
+when encoding complex sequences of transformations.
+*/
+
+pub struct Map2<T: Relation> {
+    ranges: Vec<SrcDst>,
+    _marker: T,
+}
+
+pub trait Relation {}
+
+pub struct SeedSoil;
+pub struct SoilFertilizer;
+pub struct FertilizerWater;
+pub struct WaterLight;
+pub struct LightTemperature;
+pub struct TemperatureHumidity;
+pub struct HumidityLocation;
+
+pub struct Seed(usize);
+pub struct Soil(usize);
+pub struct Fertilizer(usize);
+pub struct Water(usize);
+pub struct Light(usize);
+pub struct Temperature(usize);
+pub struct Humidity(usize);
+pub struct Location(usize);
+
+macro_rules! impl_relation {
+    { $($T:ident)+ } => {
+        $( impl Relation for $T {} )+
+    }
+}
+impl_relation! { SeedSoil SoilFertilizer FertilizerWater WaterLight LightTemperature TemperatureHumidity HumidityLocation }
+
+macro_rules! impl_from_str {
+    { $($T:ident)+ ; $($S:expr)+ } => {
+        $(
+            impl FromStr for $T {
+                type Err = String;
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    if s.trim() == $S {
+                        Ok(Self)
+                    } else {
+                        Err(s.to_string())
+                    }
+                }
+            }
+        )+
+    }
+}
+impl_from_str! { SeedSoil SoilFertilizer FertilizerWater WaterLight LightTemperature TemperatureHumidity HumidityLocation ;
+                 "seed-to-soil" "soil-to-fertilizer" "fertilizer-to-water" "water-to-light" "light-to-temperature" "temperature-to-humidity" "humidity-to-location"
+}
+
+impl<T: Relation + FromStr<Err = String>> FromStr for Map2<T> {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some((lhs, rhs)) = s.split_once(':') {
+            let lhs = lhs.trim_end_matches(" map");
+            let marker = lhs.parse::<T>()?;
+            let mut ranges = Vec::new();
+            let rhs = rhs.trim();
+            for line in rhs.lines() {
+                ranges.push(line.parse::<SrcDst>()?);
+            }
+            Ok(Map2::new(ranges, marker))
+        } else {
+            Err(s.to_string())
+        }
+    }
+}
+
+impl<T: Relation> Map2<T> {
+    pub fn new(ranges: Vec<SrcDst>, _marker: T) -> Self {
+        Self { ranges, _marker }
+    }
+    fn lookup_imp(&self, i: usize) -> usize {
+        for srcdst in self.ranges.iter() {
+            match srcdst.lookup(i) {
+                Some(x) => return x,
+                None => (),
+            }
+        }
+        i
+    }
+}
+
+macro_rules! impl_lookup {
+    {$T:ident, $U:ident, $V:ident} => {
+        impl Map2<$T> {
+            pub fn lookup(&self, i: $U) -> $V {
+                $V(self.lookup_imp(i.0))
+            }
+        }
+    }
+}
+impl_lookup! { SeedSoil, Seed, Soil }
+impl_lookup! { SoilFertilizer, Soil, Fertilizer }
+impl_lookup! { FertilizerWater, Fertilizer, Water }
+impl_lookup! { WaterLight, Water, Light}
+impl_lookup! { LightTemperature, Light, Temperature}
+impl_lookup! { TemperatureHumidity, Temperature, Humidity}
+impl_lookup! { HumidityLocation, Humidity, Location }
+
+pub struct Almanac2 {
+    seeds: Vec<usize>,
+    seed_to_soil: Map2<SeedSoil>,
+    soil_to_fertilizer: Map2<SoilFertilizer>,
+    fertilizer_to_water: Map2<FertilizerWater>,
+    water_to_light: Map2<WaterLight>,
+    light_to_temperature: Map2<LightTemperature>,
+    temperature_to_humidity: Map2<TemperatureHumidity>,
+    humidity_to_location: Map2<HumidityLocation>,
+}
+
+impl FromStr for Almanac2 {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut iter = s.split("\n\n");
+        let seeds = if let Some(line) = iter.next() {
+            if let Some((lhs, rhs)) = line.split_once(':') {
+                if lhs != "seeds" {
+                    return Err(s.to_string());
+                } else {
+                    let mut seeds = Vec::new();
+                    let rhs = rhs.trim();
+                    for num in rhs.split_whitespace() {
+                        seeds.push(num.parse::<usize>().map_err(|e| e.to_string())?);
+                    }
+                    seeds
+                }
+            } else {
+                return Err(s.to_string());
+            }
+        } else {
+            return Err(s.to_string());
+        };
+        macro_rules! parse_or_err {
+            ($T:ident) => {
+                match iter.next().map(|s| s.parse::<Map2<$T>>()) {
+                    Some(Ok(map)) => map,
+                    _ => return Err(s.to_string()),
+                }
+            };
+        }
+        let seed_to_soil = parse_or_err!(SeedSoil);
+        let soil_to_fertilizer = parse_or_err!(SoilFertilizer);
+        let fertilizer_to_water = parse_or_err!(FertilizerWater);
+        let water_to_light = parse_or_err!(WaterLight);
+        let light_to_temperature = parse_or_err!(LightTemperature);
+        let temperature_to_humidity = parse_or_err!(TemperatureHumidity);
+        let humidity_to_location = parse_or_err!(HumidityLocation);
+        Ok(Almanac2 {
+            seeds,
+            seed_to_soil,
+            soil_to_fertilizer,
+            fertilizer_to_water,
+            water_to_light,
+            light_to_temperature,
+            temperature_to_humidity,
+            humidity_to_location,
+        })
+    }
+}
+
+impl Almanac2 {
+    pub fn location(&self, seed: Seed) -> usize {
+        // This sequence is now guaranteed through the use of the typestate pattern.
+        // If someone were to mistakenly change the order, it would not longer compile.
+        let soil = self.seed_to_soil.lookup(seed);
+        let fertilizer = self.soil_to_fertilizer.lookup(soil);
+        let water = self.fertilizer_to_water.lookup(fertilizer);
+        let light = self.water_to_light.lookup(water);
+        let temperature = self.light_to_temperature.lookup(light);
+        let humidity = self.temperature_to_humidity.lookup(temperature);
+        self.humidity_to_location.lookup(humidity).0
+    }
+
+    pub fn locations_part1(&self) -> impl Iterator<Item = usize> + '_ {
+        self.seeds.iter().map(|&seed| self.location(Seed(seed)))
+    }
+
+    pub fn minimum_location<'a, F, T>(&'a self, f: F) -> usize
+    where
+        F: Fn(&'a Almanac2) -> T,
+        T: Iterator<Item = usize> + 'a,
+    {
+        f(&self).fold(usize::MAX, |acc, x| acc.min(x))
+    }
+
+    pub fn minimum_location_part1(&self) -> usize {
+        self.minimum_location(|x| x.locations_part1())
+    }
+
+    pub fn locations_part2(&self) -> impl Iterator<Item = usize> + '_ {
+        assert_eq!(self.seeds.len() & 1, 0);
+        self.seeds.chunks_exact(2).flat_map(|w| {
+            let start = w[0];
+            let len = w[1];
+            (start..start + len).map(|seed| self.location(Seed(seed)))
+        })
+    }
+    pub fn minimum_location_part2(&self) -> usize {
+        self.minimum_location(|x| x.locations_part2())
+    }
+
+    pub fn from_path<T: AsRef<Path>>(path: T) -> Result<Self, String> {
+        let s = fs::read_to_string(path.as_ref()).map_err(|e| e.to_string())?;
+        s.parse::<Self>()
     }
 }
 
