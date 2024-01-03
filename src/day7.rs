@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Card {
+    J, // for part 2
     Two,
     Three,
     Four,
@@ -14,7 +15,7 @@ pub enum Card {
     Eight,
     Nine,
     T,
-    J,
+    // J,
     Q,
     K,
     A,
@@ -110,6 +111,67 @@ fn classify(cards: &[Card; 5]) -> HandType {
     }
 }
 
+fn classify_wildcard(cards: &[Card; 5]) -> HandType {
+    use Card::*;
+    use HandType::*;
+    let mut count = [0u8; 13];
+    for card in cards {
+        match card {
+            Two => count[0] += 1,
+            Three => count[1] += 1,
+            Four => count[2] += 1,
+            Five => count[3] += 1,
+            Six => count[4] += 1,
+            Seven => count[5] += 1,
+            Eight => count[6] += 1,
+            Nine => count[7] += 1,
+            T => count[8] += 1,
+            J => count[9] += 1,
+            Q => count[10] += 1,
+            K => count[11] += 1,
+            A => count[12] += 1,
+        }
+    }
+    let n = count[9].clone();
+    count.sort_unstable();
+    if n == 5 || n == 4 {
+        FiveOfAKind
+    } else if n == 3 {
+        match count[8..13] {
+            [0, 0, 1, 1, 3] => FourOfAKind,
+            [0, 0, 0, 2, 3] => FiveOfAKind,
+            _ => unreachable!(),
+        }
+    } else if n == 2 {
+        match count[8..13] {
+            [0, 1, 1, 1, 2] => ThreeOfAKind,
+            [0, 0, 1, 2, 2] => FourOfAKind,
+            [0, 0, 0, 2, 3] => FiveOfAKind,
+            _ => unreachable!(),
+        }
+    } else if n == 1 {
+        match count[8..13] {
+            [1, 1, 1, 1, 1] => OnePair,
+            [0, 1, 1, 1, 2] => ThreeOfAKind,
+            [0, 0, 1, 2, 2] => FullHouse,
+            [0, 0, 1, 1, 3] => FourOfAKind,
+            [0, 0, 0, 1, 4] => FiveOfAKind,
+            _ => unreachable!(),
+        }
+    } else {
+        match count[8..13] {
+            [1, 1, 1, 1, 1] => HighCard,
+            [0, 1, 1, 1, 2] => OnePair,
+            [0, 0, 1, 2, 2] => TwoPair,
+            [0, 0, 1, 1, 3] => ThreeOfAKind,
+            [0, 0, 0, 2, 3] => FullHouse,
+            [0, 0, 0, 1, 4] => FourOfAKind,
+            [0, 0, 0, 0, 5] => FiveOfAKind,
+            _ => unreachable!(),
+        }
+    }
+}
+
 // Because we have carefully set up `Ord` for the `Card` and `HandType`,
 // and, furthermore, because the order of the fields in `Hand` is `HandType`
 // _then_ [Card; 5] (which itself will subject to lexicographical comparison),
@@ -122,7 +184,7 @@ pub struct Hand {
 
 impl From<[Card; 5]> for Hand {
     fn from(cards: [Card; 5]) -> Self {
-        let ty = classify(&cards);
+        let ty = classify_wildcard(&cards);
         Self { cards, ty }
     }
 }
@@ -314,5 +376,17 @@ QQQJA 483";
             (Hand::from([Q, Q, Q, J, A]), 483),
         ];
         assert_eq!(lhs, rhs);
+    }
+
+    #[test]
+    fn classify_wildcard_works() {
+        let cards = [T, Five, Five, J, Five];
+        assert_eq!(classify_wildcard(&cards), FourOfAKind);
+
+        let cards = [K, T, J, J, T];
+        assert_eq!(classify_wildcard(&cards), FourOfAKind);
+
+        let cards = [Q, Q, Q, J, A];
+        assert_eq!(classify_wildcard(&cards), FourOfAKind);
     }
 }
