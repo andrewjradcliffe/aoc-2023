@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Card {
-    J, // for part 2
+    // J, // for part 2
     Two,
     Three,
     Four,
@@ -15,7 +15,7 @@ pub enum Card {
     Eight,
     Nine,
     T,
-    // J,
+    J,
     Q,
     K,
     A,
@@ -111,6 +111,7 @@ fn classify(cards: &[Card; 5]) -> HandType {
     }
 }
 
+#[allow(dead_code)]
 fn classify_wildcard(cards: &[Card; 5]) -> HandType {
     use Card::*;
     use HandType::*;
@@ -184,7 +185,8 @@ pub struct Hand {
 
 impl From<[Card; 5]> for Hand {
     fn from(cards: [Card; 5]) -> Self {
-        let ty = classify_wildcard(&cards);
+        // let ty = classify_wildcard(&cards); // for part 2
+        let ty = classify(&cards);
         Self { cards, ty }
     }
 }
