@@ -30,6 +30,13 @@ impl Number {
     pub fn is_adjacent_same_row(&self, j: usize) -> bool {
         self.pos.start == j + 1 || self.pos.end == j
     }
+    pub fn is_adjacent(&self, i_self: usize, i: usize, j: usize) -> bool {
+        if i_self == i {
+            self.is_adjacent_same_row(j)
+        } else {
+            self.is_adjacent_other_row(j)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -131,6 +138,109 @@ pub fn sum_schematic<T: AsRef<Path>>(path: T) -> io::Result<u32> {
     Ok(scan.sum)
 }
 
+pub fn gear_sum<T: AsRef<Path>>(path: T) -> io::Result<u32> {
+    let f = File::open(path.as_ref())?;
+    let mut f = BufReader::new(f);
+    // 1 KiB, as usual.
+    let mut s = String::with_capacity(1024);
+    let mut scan = GearScan::new();
+    while f.read_line(&mut s)? != 0 {
+        scan.consume_line(&s);
+        s.clear();
+    }
+    Ok(scan.gear_sum())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GearScan {
+    lines: Vec<Vec<Number>>,
+    loci: Vec<Locus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Locus {
+    line_num: usize,
+    col_num: usize,
+}
+impl Locus {
+    pub fn new(line_num: usize, col_num: usize) -> Self {
+        Self { line_num, col_num }
+    }
+}
+
+impl GearScan {
+    pub fn new() -> Self {
+        Self {
+            lines: Vec::new(),
+            loci: Vec::new(),
+        }
+    }
+    pub fn consume_line(&mut self, s: &str) {
+        let line_num = self.lines.len();
+        let mut line: Vec<Number> = Vec::new();
+        let mut iter = s.trim_end_matches('\n').char_indices();
+        while let Some((i, c)) = iter.next() {
+            if c.is_ascii_digit() {
+                let mut val = c as u32 - OFFSET;
+                let left = i;
+                let mut right = i + 1;
+                while let Some((i, c)) = iter.next() {
+                    if c.is_ascii_digit() {
+                        val = val * 10 + (c as u32 - OFFSET);
+                        right += 1;
+                    } else {
+                        if c == '*' {
+                            self.loci.push(Locus::new(line_num, i));
+                        }
+                        break;
+                    }
+                }
+                let pos = left..right;
+                line.push(Number::new(val, pos));
+            } else if c == '*' {
+                self.loci.push(Locus::new(line_num, i));
+            }
+        }
+        self.lines.push(line);
+    }
+
+    pub fn gear_sum(&self) -> u32 {
+        let m = self.lines.len();
+        self.loci
+            .iter()
+            .filter_map(|locus| {
+                let i = locus.line_num.clone();
+                let j = locus.col_num.clone();
+                let start = if i == 0 { 0 } else { i - 1 };
+                let end = m.min(i + 2);
+                let mut lhs: u32 = 0;
+                let mut rhs: u32 = 0;
+                let mut n: u8 = 0;
+                for (i_self, line) in (start..end).zip(self.lines[start..end].iter()) {
+                    for num in line {
+                        if num.is_adjacent(i_self, i, j) {
+                            if n == 2 {
+                                return None;
+                            } else if n == 0 {
+                                lhs = num.value.clone();
+                                n = 1;
+                            } else if n == 1 {
+                                rhs = num.value.clone();
+                                n = 2;
+                            }
+                        }
+                    }
+                }
+                if n == 2 {
+                    Some(lhs * rhs)
+                } else {
+                    None
+                }
+            })
+            .sum()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,5 +294,14 @@ mod tests {
             scan.consume_line(line);
         }
         assert_eq!(scan.sum, 4361);
+    }
+
+    #[test]
+    fn gear_scan_works() {
+        let mut scan = GearScan::new();
+        for line in TEST.lines() {
+            scan.consume_line(line);
+        }
+        assert_eq!(scan.gear_sum(), 467835);
     }
 }
