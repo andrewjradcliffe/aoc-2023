@@ -16,6 +16,15 @@ impl Number {
     /// Other row means immediately above or below, i.e. if the row index is `i`, then either `i - 1` or `i + 1`
     pub fn is_adjacent_other_row(&self, j: usize) -> bool {
         self.pos.start == j + 1 || self.pos.end == j || self.pos.contains(&j)
+        // Alt 1
+        // self.pos.start <= j + 1 && j < self.pos.end + 1
+        // Alt 2
+        // let inc = (self.pos.start != 0) as usize;
+        // self.pos.start - inc <= j && j <= self.pos.end
+        // let x = j.wrapping_sub(self.pos.start);
+        // Alt 3
+        // x < self.pos.len() || self.pos.start - 1 == j || self.pos.end == j
+        // Alt 4 (not equivalent to any of the above)
         // self.pos.start == j + 1 || self.pos.start == j || self.pos.end - 1 == j || self.pos.end == j
     }
     pub fn is_adjacent_same_row(&self, j: usize) -> bool {
@@ -37,7 +46,7 @@ const OFFSET: u32 = '0' as u32;
 impl Scan {
     pub fn consume_line(&mut self, s: &str) {
         // Acquire the current (from this line) numbers and symols
-        let mut iter = s.char_indices();
+        let mut iter = s.trim_end_matches('\n').char_indices();
         while let Some((i, c)) = iter.next() {
             if c.is_ascii_digit() {
                 let mut val = c as u32 - OFFSET;
@@ -60,7 +69,6 @@ impl Scan {
                 self.curr_syms.push(i);
             }
         }
-
         // Then, attempt to validate
         // Previous numbers against current symbols
         while let Some(num) = self.prev_nums.pop() {
