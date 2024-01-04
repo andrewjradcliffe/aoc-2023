@@ -247,7 +247,7 @@ impl Network {
                 .map(|x| &x.id)
                 .collect();
             let mut n: usize = 0;
-            loop {
+            while !nodes.iter().all(|x| x.ends_with_z()) {
                 let insn = seq.next().unwrap();
                 n += 1;
                 for node in nodes.iter_mut() {
@@ -258,13 +258,8 @@ impl Network {
                         None => return Err(n),
                     }
                 }
-                if nodes.iter().all(|x| x.ends_with_z()) {
-                    return Ok(n);
-                } else if n > 1 << 36 {
-                    println!("{:#?}", nodes);
-                    return Err(n);
-                }
             }
+            Ok(n)
         } else {
             Err(0)
         }

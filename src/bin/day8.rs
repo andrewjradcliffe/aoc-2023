@@ -22,3 +22,15 @@ fn main() {
         None => println!("Please provide path to file as first argument"),
     }
 }
+/*
+time ./target/release/day8 ./input/day8.txt
+terminate at exit after: 11567
+terminate at exit after: 9858474970153
+
+real	983m23.435s
+user	981m19.564s
+sys	0m1.988s
+
+
+Really...?
+ */
