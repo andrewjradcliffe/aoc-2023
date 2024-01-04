@@ -149,18 +149,15 @@ impl FromStr for Tree {
     }
 }
 
-use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Network {
     trees: Vec<Tree>,
-    // trees: HashMap<u16, Tree>,
 }
 
 impl From<Vec<Tree>> for Network {
     fn from(mut trees: Vec<Tree>) -> Self {
         // trees.sort_unstable_by(|a, b| a.id.cmp(&b.id));
         // trees.sort_unstable_by(|a, b| a.id.idx.cmp(&b.id.idx));
-        // let trees: HashMap<_, _> = trees.into_iter().map(|x| (x.id.idx.clone(), x)).collect();
         let mut t = Vec::with_capacity(17576);
         let d = Node {
             idx: 0,
@@ -207,7 +204,6 @@ impl Network {
         //     .binary_search_by(|x| x.id.idx.cmp(&node.idx))
         //     .ok()?;
         // let tree = &self.trees[i];
-        // let tree = self.trees.get(&node.idx)?;
         let tree = &self.trees[node.idx as usize];
         match insn {
             L => Some(&tree.left),
@@ -250,12 +246,6 @@ impl Network {
                 .filter(|x| x.id.ends_with_a())
                 .map(|x| &x.id)
                 .collect();
-            // let mut nodes: Vec<_> = self
-            //     .trees
-            //     .values()
-            //     .filter(|x| x.id.ends_with_a())
-            //     .map(|x| &x.id)
-            //     .collect();
             let mut n: usize = 0;
             loop {
                 let insn = seq.next().unwrap();
