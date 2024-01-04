@@ -155,7 +155,7 @@ pub struct Network {
 }
 
 impl From<Vec<Tree>> for Network {
-    fn from(mut trees: Vec<Tree>) -> Self {
+    fn from(trees: Vec<Tree>) -> Self {
         // trees.sort_unstable_by(|a, b| a.id.cmp(&b.id));
         // trees.sort_unstable_by(|a, b| a.id.idx.cmp(&b.id.idx));
         let mut t = Vec::with_capacity(17576);
