@@ -8,7 +8,11 @@ fn main() {
             Ok((seq, network)) => {
                 let entry = Node::from(['A', 'A', 'A']);
                 let exit = Node::from(['Z', 'Z', 'Z']);
-                match network.traverse(seq, entry, exit) {
+                match network.traverse(seq.clone(), entry, exit) {
+                    Ok(n) => println!("terminate at exit after: {}", n),
+                    Err(n) => println!("does not terminate at exit after: {}", n),
+                }
+                match network.simultaneous_traverse(seq) {
                     Ok(n) => println!("terminate at exit after: {}", n),
                     Err(n) => println!("does not terminate at exit after: {}", n),
                 }
