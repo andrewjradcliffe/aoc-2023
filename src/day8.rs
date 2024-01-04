@@ -100,7 +100,12 @@ impl From<[char; 3]> for Node {
         assert!(mid < OFFSET);
         let right = id[2] as u32 - OFFSET;
         assert!(right < OFFSET);
-        let idx = (left + 26 * mid + 26 * 26 * right) as u16;
+        // this encoding is as a linear index into a 3-dimensional array
+        // of size (26, 26, 26) with 0-based indexing.
+        // let idx = (left + 26 * mid + 26 * 26 * right) as u16;
+        // in keeping with a positional number system, this is likely more
+        // clear if we write it as (equivalently):
+        let idx = (left * 26 * 26 + mid * 26 + right) as u16;
         let ends_with_a = id[2] == 'A';
         let ends_with_z = id[2] == 'Z';
         Self {
