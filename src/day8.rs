@@ -40,14 +40,23 @@ impl From<Vec<Instruction>> for InstructionSeq {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Node([char; 3]);
+// #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+// pub struct Node([char; 3]);
 
-impl From<[char; 3]> for Node {
-    fn from(id: [char; 3]) -> Self {
-        Self(id)
-    }
-}
+// impl Node {
+//     pub fn ends_with_a(&self) -> bool {
+//         self.0[2] == 'A'
+//     }
+//     pub fn ends_with_z(&self) -> bool {
+//         self.0[2] == 'Z'
+//     }
+// }
+
+// impl From<[char; 3]> for Node {
+//     fn from(id: [char; 3]) -> Self {
+//         Self(id)
+//     }
+// }
 
 impl FromStr for Node {
     type Err = String;
@@ -72,6 +81,41 @@ impl FromStr for Node {
         } else {
             Err(s.to_string())
         }
+    }
+}
+
+/// `Node` specialized for this problem.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Node {
+    idx: u16,
+    ends_with_a: bool,
+    ends_with_z: bool,
+}
+const OFFSET: u32 = 'A' as u32;
+impl From<[char; 3]> for Node {
+    fn from(id: [char; 3]) -> Self {
+        let left = id[0] as u32 - OFFSET;
+        assert!(left < OFFSET);
+        let mid = id[1] as u32 - OFFSET;
+        assert!(mid < OFFSET);
+        let right = id[2] as u32 - OFFSET;
+        assert!(right < OFFSET);
+        let idx = (left + 26 * mid + 26 * 26 * right) as u16;
+        let ends_with_a = id[2] == 'A';
+        let ends_with_z = id[2] == 'Z';
+        Self {
+            idx,
+            ends_with_a,
+            ends_with_z,
+        }
+    }
+}
+impl Node {
+    pub fn ends_with_a(&self) -> bool {
+        self.ends_with_a
+    }
+    pub fn ends_with_z(&self) -> bool {
+        self.ends_with_z
     }
 }
 
@@ -105,15 +149,30 @@ impl FromStr for Tree {
     }
 }
 
+use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Network {
     trees: Vec<Tree>,
+    // trees: HashMap<u16, Tree>,
 }
 
 impl From<Vec<Tree>> for Network {
     fn from(mut trees: Vec<Tree>) -> Self {
-        trees.sort_unstable_by(|a, b| a.id.cmp(&b.id));
-        Self { trees }
+        // trees.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+        // trees.sort_unstable_by(|a, b| a.id.idx.cmp(&b.id.idx));
+        // let trees: HashMap<_, _> = trees.into_iter().map(|x| (x.id.idx.clone(), x)).collect();
+        let mut t = Vec::with_capacity(17576);
+        let d = Node {
+            idx: 0,
+            ends_with_a: false,
+            ends_with_z: false,
+        };
+        t.resize(17576, Tree::new(d.clone(), d.clone(), d));
+        for x in trees {
+            let i = x.id.idx.clone() as usize;
+            t[i] = x;
+        }
+        Self { trees: t }
     }
 }
 
@@ -129,21 +188,27 @@ impl FromStr for Network {
 }
 
 impl Network {
-    /// Complexity: O(lgn) best case, O(n) worst case.
-    pub fn push_tree(&mut self, tree: Tree) {
-        match self.trees.binary_search_by(|x| x.id.cmp(&tree.id)) {
-            Ok(i) => {
-                self.trees[i] = tree;
-            }
-            Err(i) => {
-                self.trees.insert(i, tree);
-            }
-        }
-    }
+    // /// Complexity: O(lgn) best case, O(n) worst case.
+    // pub fn push_tree(&mut self, tree: Tree) {
+    //     match self.trees.binary_search_by(|x| x.id.cmp(&tree.id)) {
+    //         Ok(i) => {
+    //             self.trees[i] = tree;
+    //         }
+    //         Err(i) => {
+    //             self.trees.insert(i, tree);
+    //         }
+    //     }
+    // }
     pub fn branch(&self, insn: Instruction, node: &Node) -> Option<&Node> {
         use Instruction::*;
-        let i = self.trees.binary_search_by(|x| x.id.cmp(node)).ok()?;
-        let tree = &self.trees[i];
+        // let i = self.trees.binary_search_by(|x| x.id.cmp(node)).ok()?;
+        // let i = self
+        //     .trees
+        //     .binary_search_by(|x| x.id.idx.cmp(&node.idx))
+        //     .ok()?;
+        // let tree = &self.trees[i];
+        // let tree = self.trees.get(&node.idx)?;
+        let tree = &self.trees[node.idx as usize];
         match insn {
             L => Some(&tree.left),
             R => Some(&tree.right),
@@ -151,21 +216,16 @@ impl Network {
     }
     /// Interpretation of `Result<usize, usize>`:
     /// - Ok(n)  : n > 0; `entry` terminates at `exit` after `n` branches
-    /// - Err(0) : cannot traverse with empty `insn_set`
+    /// - Err(0) : cannot traverse with empty `seq`
     /// - Err(n) : n > 0; `entry` does not terminate at `exit` after `n` branches
-    pub fn traverse(
-        &self,
-        insn_set: InstructionSeq,
-        entry: Node,
-        exit: Node,
-    ) -> Result<usize, usize> {
-        let insn_set = insn_set.0;
-        if !insn_set.is_empty() {
-            let mut insn_set = insn_set.into_iter().cycle();
+    pub fn traverse(&self, seq: InstructionSeq, entry: Node, exit: Node) -> Result<usize, usize> {
+        let seq = seq.0;
+        if !seq.is_empty() {
+            let mut seq = seq.into_iter().cycle();
 
             let mut node = &entry;
             let mut n: usize = 0;
-            while let Some(next) = self.branch(insn_set.next().unwrap(), node) {
+            while let Some(next) = self.branch(seq.next().unwrap(), node) {
                 n += 1;
                 if *next == exit {
                     return Ok(n);
@@ -174,6 +234,47 @@ impl Network {
                 }
             }
             Err(n)
+        } else {
+            Err(0)
+        }
+    }
+
+    pub fn simultaneous_traverse(&self, seq: InstructionSeq) -> Result<usize, usize> {
+        let seq = seq.0;
+        if !seq.is_empty() {
+            let mut seq = seq.into_iter().cycle();
+
+            let mut nodes: Vec<_> = self
+                .trees
+                .iter()
+                .filter(|x| x.id.ends_with_a())
+                .map(|x| &x.id)
+                .collect();
+            // let mut nodes: Vec<_> = self
+            //     .trees
+            //     .values()
+            //     .filter(|x| x.id.ends_with_a())
+            //     .map(|x| &x.id)
+            //     .collect();
+            let mut n: usize = 0;
+            loop {
+                let insn = seq.next().unwrap();
+                n += 1;
+                for node in nodes.iter_mut() {
+                    match self.branch(insn, node) {
+                        Some(next) => {
+                            *node = next;
+                        }
+                        None => return Err(n),
+                    }
+                }
+                if nodes.iter().all(|x| x.ends_with_z()) {
+                    return Ok(n);
+                } else if n > 1 << 36 {
+                    println!("{:#?}", nodes);
+                    return Err(n);
+                }
+            }
         } else {
             Err(0)
         }
@@ -265,5 +366,23 @@ ZZZ = (ZZZ, ZZZ)";
         let entry = Node::from(['A', 'A', 'A']);
         let exit = Node::from(['Z', 'Z', 'Z']);
         assert_eq!(network.traverse(inst_set, entry, exit).unwrap(), 6);
+    }
+
+    #[test]
+    fn simultaneous_traverse_works() {
+        let s = "\
+DDA = (DDB, XXX)
+DDB = (XXX, DDZ)
+DDZ = (DDB, XXX)
+FFA = (FFB, XXX)
+FFB = (FFC, FFC)
+FFC = (FFZ, FFZ)
+FFZ = (FFB, FFB)
+XXX = (XXX, XXX)";
+        let network = s.parse::<Network>().unwrap();
+        let lhs = network
+            .simultaneous_traverse(InstructionSeq(vec![L, R]))
+            .unwrap();
+        assert_eq!(lhs, 6);
     }
 }
