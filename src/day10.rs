@@ -8,14 +8,14 @@ use std::str::FromStr;
 
 /// A column-major 2-dimensional grid
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Grid {
-    inner: Vec<Tile>,
+pub struct Grid<T> {
+    inner: Vec<T>,
     n_rows: usize,
     n_cols: usize,
     start: (usize, usize),
 }
 
-impl Grid {
+impl<T> Grid<T> {
     #[inline]
     fn linear_index(&self, i: usize, j: usize) -> usize {
         i + self.n_rows * j
@@ -36,7 +36,10 @@ impl Grid {
     pub fn n_cols(&self) -> usize {
         self.n_cols
     }
-    pub fn transpose(&self) -> Grid {
+}
+
+impl<T: Clone> Grid<T> {
+    pub fn transpose(&self) -> Grid<T> {
         let mut other = Vec::with_capacity(self.len());
         for i in 0..self.n_rows {
             for j in 0..self.n_cols {
@@ -50,13 +53,15 @@ impl Grid {
             start: (self.start.1, self.start.0),
         }
     }
+}
 
+impl Grid<Tile> {
     pub fn from_vec(v: Vec<Tile>, n_rows: usize, n_cols: usize) -> Self {
         assert_eq!(v.len(), n_rows * n_cols);
         let start = v
             .iter()
             .position(|x| *x == Tile::Start)
-            .map(|i| Grid::cartesian_index(n_rows, i))
+            .map(|i| Grid::<Tile>::cartesian_index(n_rows, i))
             .expect("`v` must contain a `Start` tile");
         Grid {
             inner: v,
@@ -95,14 +100,14 @@ impl Grid {
     }
 }
 
-impl Index<(usize, usize)> for Grid {
-    type Output = Tile;
+impl<T> Index<(usize, usize)> for Grid<T> {
+    type Output = T;
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         &self.inner[self.linear_index(index.0, index.1)]
     }
 }
 
-impl IndexMut<(usize, usize)> for Grid {
+impl<T> IndexMut<(usize, usize)> for Grid<T> {
     // type Output = Tile;
     fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
         let idx = self.linear_index(index.0, index.1);
@@ -110,7 +115,7 @@ impl IndexMut<(usize, usize)> for Grid {
     }
 }
 
-impl FromStr for Grid {
+impl FromStr for Grid<Tile> {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut inner = Vec::new();
@@ -258,7 +263,7 @@ pub struct Visitor<'a> {
     last_col: usize,
     steps: usize,
     // path: Vec<Tile>,
-    grid: &'a Grid,
+    grid: &'a Grid<Tile>,
 }
 impl Visitor<'_> {
     pub fn propose(&self) -> Direction {
@@ -337,9 +342,9 @@ impl Visitor<'_> {
     }
 }
 
-impl<'a> TryFrom<&'a Grid> for Visitor<'a> {
+impl<'a> TryFrom<&'a Grid<Tile>> for Visitor<'a> {
     type Error = String;
-    fn try_from(grid: &'a Grid) -> Result<Self, String> {
+    fn try_from(grid: &'a Grid<Tile>) -> Result<Self, String> {
         let last_row = grid.n_rows() - 1;
         let last_col = grid.n_cols() - 1;
         let idx = grid.start.clone();
@@ -365,6 +370,41 @@ impl<'a> TryFrom<&'a Grid> for Visitor<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum State {
+    MainLoop,
+    Inside,
+    Outside,
+    Null,
+}
+use State::*;
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatefulTile {
+    tile: Tile,
+    state: State,
+}
+
+type StateGrid = Grid<Rc<RefCell<StatefulTile>>>;
+
+impl From<Grid<Tile>> for StateGrid {
+    fn from(grid: Grid<Tile>) -> Self {
+        let mut inner = Vec::with_capacity(grid.len());
+        for tile in grid.inner {
+            inner.push(Rc::new(RefCell::new(StatefulTile { tile, state: Null })));
+        }
+        Self {
+            inner,
+            n_rows: grid.n_rows,
+            n_cols: grid.n_cols,
+            start: grid.start,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -384,7 +424,7 @@ mod tests {
 .|.|.
 .L-J.
 ";
-        let lhs = s.parse::<Grid>().unwrap();
+        let lhs = s.parse::<Grid<Tile>>().unwrap();
         let rhs = Grid::from_vec(
             vec![
                 Ground, Ground, Ground, Start, Vert, NE, Horz, Ground, Horz, SW, Vert, NW, Ground,
@@ -412,17 +452,17 @@ LJ...";
 
     #[test]
     fn visitor_try_from() {
-        let grid = TEST1.parse::<Grid>().unwrap();
+        let grid = TEST1.parse::<Grid<Tile>>().unwrap();
         let vis = Visitor::try_from(&grid);
         assert!(vis.is_ok());
-        let grid = TEST2.parse::<Grid>().unwrap();
+        let grid = TEST2.parse::<Grid<Tile>>().unwrap();
         let vis = Visitor::try_from(&grid);
         assert!(vis.is_ok());
     }
 
     #[test]
     fn traverse() {
-        let grid = TEST1.parse::<Grid>().unwrap();
+        let grid = TEST1.parse::<Grid<Tile>>().unwrap();
         let mut vis = Visitor::try_from(&grid).unwrap();
         assert_eq!(vis.idx, (2, 1));
         assert_eq!(vis.tile, Vert);
@@ -458,7 +498,7 @@ LJ...";
         assert_eq!(vis.approach, Right);
         assert_eq!(vis.steps, 8);
 
-        let grid = TEST2.parse::<Grid>().unwrap();
+        let grid = TEST2.parse::<Grid<Tile>>().unwrap();
         let mut vis = Visitor::try_from(&grid).unwrap();
         vis.traverse();
         assert_eq!(vis.steps, 16);
