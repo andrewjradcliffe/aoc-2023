@@ -33,4 +33,14 @@ sys	0m1.988s
 
 
 Really...?
+
+I guess so:
+
+(define n 9858474970153)
+(define time (+ 983 (/ 23.435 60)))
+(define secs (* time 60))
+(/ (* secs 1e9) n)
+;; time per iteration = 5.985046894031348 ns
+
+which, for an input with 6 addresses that end in 'A', is 1 ns per dereference.
  */
