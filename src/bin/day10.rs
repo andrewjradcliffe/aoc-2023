@@ -17,6 +17,7 @@ fn main() {
                     Ok(mut vis) => {
                         vis.classify_states();
                         println!("{}", vis.enclosed());
+                        println!("{}", vis);
                     }
                     Err(e) => println!("{:#?}", e),
                 }

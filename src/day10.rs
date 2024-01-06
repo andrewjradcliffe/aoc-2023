@@ -253,12 +253,12 @@ impl TryFrom<char> for Tile {
 impl fmt::Display for Tile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let c = match self {
-            Vert => '|',
-            Horz => '-',
-            NE => 'L',
-            NW => 'J',
-            SW => '7',
-            SE => 'F',
+            Vert => '│', // │
+            Horz => '─', // ─
+            NE => '└',   // └
+            NW => '┘',   // ┘
+            SW => '┐',   // ┐
+            SE => '┌',   // ┌
             Ground => '.',
             Start => 'S',
         };
@@ -881,6 +881,25 @@ impl StatefulVisitor<'_> {
         }
     }
 }
+impl<'a> fmt::Display for StatefulVisitor<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let n_rows = self.vis.grid.n_rows();
+        let n_cols = self.vis.grid.n_cols();
+        for i in 0..n_rows {
+            for j in 0..n_cols {
+                match self.state(i, j) {
+                    Inside => write!(f, "I")?,
+                    Outside => write!(f, "O")?,
+                    _ => write!(f, "{}", self.vis.grid[(i, j)])?,
+                }
+            }
+            if i != n_rows - 1 {
+                write!(f, "\n")?;
+            }
+        }
+        Ok(())
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1050,25 +1069,21 @@ L7JLJL-JLJLJL--JLJ.L";
     fn classify_states() {
         let grid = TEST3.parse::<Grid>().unwrap();
         let mut vis = StatefulVisitor::try_from(&grid).unwrap();
-        vis.main_loop();
         vis.classify_states();
         assert_eq!(vis.enclosed(), 4);
 
         let grid = TEST4.parse::<Grid>().unwrap();
         let mut vis = StatefulVisitor::try_from(&grid).unwrap();
-        vis.main_loop();
         vis.classify_states();
         assert_eq!(vis.enclosed(), 4);
 
         let grid = TEST5.parse::<Grid>().unwrap();
         let mut vis = StatefulVisitor::try_from(&grid).unwrap();
-        vis.main_loop();
         vis.classify_states();
         assert_eq!(vis.enclosed(), 8);
 
         let grid = TEST6.parse::<Grid>().unwrap();
         let mut vis = StatefulVisitor::try_from(&grid).unwrap();
-        vis.main_loop();
         vis.classify_states();
         assert_eq!(vis.enclosed(), 10);
     }
