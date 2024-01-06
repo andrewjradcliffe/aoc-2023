@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::ops::Index;
@@ -8,14 +9,14 @@ use std::str::FromStr;
 
 /// A column-major 2-dimensional grid
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Grid<T> {
-    inner: Vec<T>,
+pub struct Grid {
+    inner: Vec<Tile>,
     n_rows: usize,
     n_cols: usize,
     start: (usize, usize),
 }
 
-impl<T> Grid<T> {
+impl Grid {
     #[inline]
     fn linear_index(&self, i: usize, j: usize) -> usize {
         i + self.n_rows * j
@@ -36,10 +37,12 @@ impl<T> Grid<T> {
     pub fn n_cols(&self) -> usize {
         self.n_cols
     }
-}
 
-impl<T: Clone> Grid<T> {
-    pub fn transpose(&self) -> Grid<T> {
+    #[inline]
+    fn is_inbounds(&self, i: usize, j: usize) -> bool {
+        (i < self.n_rows) & (j < self.n_cols)
+    }
+    pub fn transpose(&self) -> Grid {
         let mut other = Vec::with_capacity(self.len());
         for i in 0..self.n_rows {
             for j in 0..self.n_cols {
@@ -53,15 +56,13 @@ impl<T: Clone> Grid<T> {
             start: (self.start.1, self.start.0),
         }
     }
-}
 
-impl Grid<Tile> {
     pub fn from_vec(v: Vec<Tile>, n_rows: usize, n_cols: usize) -> Self {
         assert_eq!(v.len(), n_rows * n_cols);
         let start = v
             .iter()
             .position(|x| *x == Tile::Start)
-            .map(|i| Grid::<Tile>::cartesian_index(n_rows, i))
+            .map(|i| Grid::cartesian_index(n_rows, i))
             .expect("`v` must contain a `Start` tile");
         Grid {
             inner: v,
@@ -100,14 +101,14 @@ impl Grid<Tile> {
     }
 }
 
-impl<T> Index<(usize, usize)> for Grid<T> {
-    type Output = T;
+impl Index<(usize, usize)> for Grid {
+    type Output = Tile;
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         &self.inner[self.linear_index(index.0, index.1)]
     }
 }
 
-impl<T> IndexMut<(usize, usize)> for Grid<T> {
+impl IndexMut<(usize, usize)> for Grid {
     // type Output = Tile;
     fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
         let idx = self.linear_index(index.0, index.1);
@@ -115,7 +116,7 @@ impl<T> IndexMut<(usize, usize)> for Grid<T> {
     }
 }
 
-impl FromStr for Grid<Tile> {
+impl FromStr for Grid {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut inner = Vec::new();
@@ -138,6 +139,22 @@ impl FromStr for Grid<Tile> {
         } else {
             Err(s.to_string())
         }
+    }
+}
+
+impl fmt::Display for Grid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let n_rows = self.n_rows();
+        let n_cols = self.n_cols();
+        for i in 0..n_rows {
+            for j in 0..n_cols {
+                write!(f, "{}", self[(i, j)])?;
+            }
+            if i != n_rows - 1 {
+                write!(f, "\n")?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -233,6 +250,21 @@ impl TryFrom<char> for Tile {
         }
     }
 }
+impl fmt::Display for Tile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let c = match self {
+            Vert => '|',
+            Horz => '-',
+            NE => 'L',
+            NW => 'J',
+            SW => '7',
+            SE => 'F',
+            Ground => '.',
+            Start => 'S',
+        };
+        write!(f, "{}", c)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Direction {
@@ -263,7 +295,7 @@ pub struct Visitor<'a> {
     last_col: usize,
     steps: usize,
     // path: Vec<Tile>,
-    grid: &'a Grid<Tile>,
+    grid: &'a Grid,
 }
 impl Visitor<'_> {
     pub fn propose(&self) -> Direction {
@@ -286,9 +318,9 @@ impl Visitor<'_> {
     pub fn is_proposal_inbounds(&self, dir: &Direction) -> bool {
         match dir {
             Top => self.idx.0 != 0,
-            Bottom => self.idx.0 != self.last_col,
+            Bottom => self.idx.0 != self.last_row,
             Left => self.idx.1 != 0,
-            Right => self.idx.1 != self.last_row,
+            Right => self.idx.1 != self.last_col,
         }
     }
     pub fn is_feasible(&self, dir: &Direction) -> bool {
@@ -342,9 +374,9 @@ impl Visitor<'_> {
     }
 }
 
-impl<'a> TryFrom<&'a Grid<Tile>> for Visitor<'a> {
+impl<'a> TryFrom<&'a Grid> for Visitor<'a> {
     type Error = String;
-    fn try_from(grid: &'a Grid<Tile>) -> Result<Self, String> {
+    fn try_from(grid: &'a Grid) -> Result<Self, String> {
         let last_row = grid.n_rows() - 1;
         let last_col = grid.n_cols() - 1;
         let idx = grid.start.clone();
@@ -370,7 +402,7 @@ impl<'a> TryFrom<&'a Grid<Tile>> for Visitor<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum State {
     MainLoop,
     Inside,
@@ -379,28 +411,473 @@ pub enum State {
 }
 use State::*;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StatefulTile {
-    tile: Tile,
-    state: State,
+#[derive(Debug)]
+pub struct StatefulVisitor<'a> {
+    vis: Visitor<'a>,
+    states: Vec<State>,
+}
+impl<'a> TryFrom<&'a Grid> for StatefulVisitor<'a> {
+    type Error = String;
+    fn try_from(grid: &'a Grid) -> Result<Self, String> {
+        let vis = Visitor::try_from(grid)?;
+        let n = vis.grid.len();
+        let mut states = Vec::with_capacity(n);
+        states.resize(n, Null);
+        states[vis.grid.linear_index(grid.start.0, grid.start.1)] = MainLoop;
+        states[vis.grid.linear_index(vis.idx.0, vis.idx.1)] = MainLoop;
+        Ok(Self { vis, states })
+    }
 }
 
-type StateGrid = Grid<Rc<RefCell<StatefulTile>>>;
-
-impl From<Grid<Tile>> for StateGrid {
-    fn from(grid: Grid<Tile>) -> Self {
-        let mut inner = Vec::with_capacity(grid.len());
-        for tile in grid.inner {
-            inner.push(Rc::new(RefCell::new(StatefulTile { tile, state: Null })));
+impl StatefulVisitor<'_> {
+    fn linear_index(&self, i: usize, j: usize) -> usize {
+        self.vis.grid.linear_index(i, j)
+    }
+    fn vis_index(&self) -> usize {
+        self.vis.grid.linear_index(self.vis.idx.0, self.vis.idx.1)
+    }
+    fn state(&self, i: usize, j: usize) -> State {
+        let idx = self.linear_index(i, j);
+        self.states[idx]
+    }
+    pub fn main_loop(&mut self) {
+        let mut tile = self.vis.tile.clone();
+        while tile != Start {
+            let proposal = self.vis.propose();
+            if self.vis.move_if_feasible(&proposal) {
+                let idx = self.vis_index();
+                self.states[idx] = MainLoop;
+                tile = self.vis.tile.clone();
+            }
         }
-        Self {
-            inner,
-            n_rows: grid.n_rows,
-            n_cols: grid.n_cols,
-            start: grid.start,
+    }
+    // N.B. idempotent.
+    pub fn classify_perimeter(&mut self) {
+        let n_rows = self.vis.grid.n_rows();
+        let n_cols = self.vis.grid.n_cols();
+        for j in [0, n_cols - 1] {
+            for i in 0..n_rows {
+                let idx = self.linear_index(i, j);
+                match self.states[idx] {
+                    MainLoop => (),
+                    _ => {
+                        self.states[idx] = Outside;
+                    }
+                }
+            }
+        }
+        for i in [0, n_rows - 1] {
+            for j in 1..n_cols - 1 {
+                let idx = self.linear_index(i, j);
+                match self.states[idx] {
+                    MainLoop => (),
+                    _ => {
+                        self.states[idx] = Outside;
+                    }
+                }
+            }
+        }
+    }
+    fn try_left(&self, i: usize, j: usize) -> bool {
+        let j = j - 1;
+        if self.vis.grid.is_inbounds(i, j) {
+            match self.state(i, j) {
+                Outside => true,
+                _ => self.try_left_escape_top(i, j) || self.try_left_escape_bottom(i, j),
+            }
+        } else {
+            false
+        }
+    }
+    fn try_left_escape_top(&self, i: usize, j: usize) -> bool {
+        if self.vis.grid.is_inbounds(i, j) {
+            if self.state(i, j) == Outside {
+                true
+            } else if self.vis.grid.is_inbounds(i - 1, j) {
+                let above = self.vis.grid[(i - 1, j)];
+                let below = self.vis.grid[(i, j)];
+                match (above, below) {
+                    (Horz | NE | NW | Ground, Horz | SW | SE | Ground) => {
+                        if self.state(i - 1, j) == Outside {
+                            true
+                        } else {
+                            self.try_left_escape_top(i, j - 1)
+                        }
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+    fn try_left_escape_bottom(&self, i: usize, j: usize) -> bool {
+        if self.vis.grid.is_inbounds(i, j) {
+            if self.state(i, j) == Outside {
+                true
+            } else if self.vis.grid.is_inbounds(i + 1, j) {
+                let above = self.vis.grid[(i, j)];
+                let below = self.vis.grid[(i + 1, j)];
+                match (above, below) {
+                    (Horz | NE | NW | Ground, Horz | SW | SE | Ground) => {
+                        if self.state(i + 1, j) == Outside {
+                            true
+                        } else {
+                            self.try_left_escape_bottom(i, j - 1)
+                        }
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+    fn try_right(&self, i: usize, j: usize) -> bool {
+        let j = j + 1;
+        if self.vis.grid.is_inbounds(i, j) {
+            match self.state(i, j) {
+                Outside => true,
+                _ => self.try_right_escape_top(i, j) || self.try_right_escape_bottom(i, j),
+            }
+        } else {
+            false
+        }
+    }
+    fn try_right_escape_top(&self, i: usize, j: usize) -> bool {
+        if self.vis.grid.is_inbounds(i, j) {
+            if self.state(i, j) == Outside {
+                true
+            } else if self.vis.grid.is_inbounds(i - 1, j) {
+                let above = self.vis.grid[(i - 1, j)];
+                let below = self.vis.grid[(i, j)];
+                match (above, below) {
+                    (Horz | NE | NW | Ground, Horz | SW | SE | Ground) => {
+                        if self.state(i - 1, j) == Outside {
+                            true
+                        } else {
+                            self.try_right_escape_top(i, j + 1)
+                        }
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+    fn try_right_escape_bottom(&self, i: usize, j: usize) -> bool {
+        if self.vis.grid.is_inbounds(i, j) {
+            if self.state(i, j) == Outside {
+                true
+            } else if self.vis.grid.is_inbounds(i + 1, j) {
+                let above = self.vis.grid[(i, j)];
+                let below = self.vis.grid[(i + 1, j)];
+                match (above, below) {
+                    (Horz | NE | NW | Ground, Horz | SW | SE | Ground) => {
+                        if self.state(i + 1, j) == Outside {
+                            true
+                        } else {
+                            self.try_right_escape_bottom(i, j + 1)
+                        }
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+    fn try_top(&self, i: usize, j: usize) -> bool {
+        let i = i - 1;
+        if self.vis.grid.is_inbounds(i, j) {
+            match self.state(i, j) {
+                Outside => true,
+                _ => self.try_top_escape_right(i, j) || self.try_top_escape_left(i, j),
+            }
+        } else {
+            false
+        }
+    }
+    fn try_top_escape_right(&self, i: usize, j: usize) -> bool {
+        if self.vis.grid.is_inbounds(i, j) {
+            if self.state(i, j) == Outside {
+                true
+            } else if self.vis.grid.is_inbounds(i, j + 1) {
+                let left = self.vis.grid[(i, j)];
+                let right = self.vis.grid[(i, j + 1)];
+                match (left, right) {
+                    (Vert | SW | NW | Ground, Vert | SE | NE | Ground) => {
+                        if self.state(i, j + 1) == Outside {
+                            true
+                        } else {
+                            self.try_top_escape_right(i - 1, j)
+                        }
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+    fn try_top_escape_left(&self, i: usize, j: usize) -> bool {
+        if self.vis.grid.is_inbounds(i, j) {
+            if self.state(i, j) == Outside {
+                true
+            } else if self.vis.grid.is_inbounds(i, j - 1) {
+                let left = self.vis.grid[(i, j - 1)];
+                let right = self.vis.grid[(i, j)];
+                match (left, right) {
+                    (Vert | SW | NW | Ground, Vert | SE | NE | Ground) => {
+                        if self.state(i, j - 1) == Outside {
+                            true
+                        } else {
+                            self.try_top_escape_left(i - 1, j)
+                        }
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+    fn try_bottom(&self, i: usize, j: usize) -> bool {
+        let i = i + 1;
+        if self.vis.grid.is_inbounds(i, j) {
+            match self.state(i, j) {
+                Outside => true,
+                _ => self.try_bottom_escape_right(i, j) || self.try_bottom_escape_left(i, j),
+            }
+        } else {
+            false
+        }
+    }
+    fn try_bottom_escape_right(&self, i: usize, j: usize) -> bool {
+        if self.vis.grid.is_inbounds(i, j) {
+            if self.state(i, j) == Outside {
+                true
+            } else if self.vis.grid.is_inbounds(i, j + 1) {
+                let left = self.vis.grid[(i, j)];
+                let right = self.vis.grid[(i, j + 1)];
+                match (left, right) {
+                    (Vert | SW | NW | Ground, Vert | SE | NE | Ground) => {
+                        if self.state(i, j + 1) == Outside {
+                            true
+                        } else {
+                            self.try_bottom_escape_right(i + 1, j)
+                        }
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+    fn try_bottom_escape_left(&self, i: usize, j: usize) -> bool {
+        if self.vis.grid.is_inbounds(i, j) {
+            if self.state(i, j) == Outside {
+                true
+            } else if self.vis.grid.is_inbounds(i, j - 1) {
+                let left = self.vis.grid[(i, j - 1)];
+                let right = self.vis.grid[(i, j)];
+                match (left, right) {
+                    (Vert | SW | NW | Ground, Vert | SE | NE | Ground) => {
+                        if self.state(i, j - 1) == Outside {
+                            true
+                        } else {
+                            self.try_bottom_escape_left(i + 1, j)
+                        }
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    // fn try_bottom_escape(&self, i: usize, j: usize, dir: Direction) -> bool {
+    //     let j_other = match dir {
+    //         Left => j - 1,
+    //         Right => j + 1,
+    //         _ => unreachable!(),
+    //     };
+    //     let (left, right) = match dir {
+    //         Left => (self.vis.grid[(i, j - 1)], self.vis.grid[(i, j)]),
+    //         Right => (self.vis.grid[(i, j)], self.vis.grid[(i, j + 1)]),
+    //         _ => unreachable!(),
+    //     };
+    //     if self.vis.grid.is_inbounds(i, j) {
+    //         if self.state(i, j) == Outside {
+    //             true
+    //         } else if self.vis.grid.is_inbounds(i, j_other) {
+    //             match (left, right) {
+    //                 (Vert | SW | NW | Ground, Vert | SE | NE | Ground) => {
+    //                     if self.state(i, j_other) == Outside {
+    //                         true
+    //                     } else {
+    //                         self.try_bottom_escape_left(i + 1, j)
+    //                     }
+    //                 }
+    //                 _ => false,
+    //             }
+    //         } else {
+    //             false
+    //         }
+    //     } else {
+    //         false
+    //     }
+    // }
+    fn is_not_null(&self, i: usize, j: usize) -> bool {
+        if self.vis.grid.is_inbounds(i, j) {
+            self.state(i, j) != Null
+        } else {
+            true
+        }
+    }
+    pub fn all_neighbors_classified(&self, i: usize, j: usize) -> bool {
+        self.is_not_null(i.wrapping_sub(1), j)
+            && self.is_not_null(i + 1, j)
+            && self.is_not_null(i, j + 1)
+            && self.is_not_null(i, j.wrapping_sub(1))
+    }
+    pub fn classify_interior(&mut self, i: usize, j: usize) -> bool {
+        let idx = self.linear_index(i, j);
+        match self.state(i, j) {
+            Null => {
+                if self.try_left(i, j)
+                    || self.try_right(i, j)
+                    || self.try_top(i, j)
+                    || self.try_bottom(i, j)
+                {
+                    self.states[idx] = Outside;
+                    true
+                } else {
+                    if self.all_neighbors_classified(i, j) {
+                        self.states[idx] = Inside;
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+            Inside => true,
+            Outside => true,
+            MainLoop => true,
+        }
+    }
+    fn try_connect_outside(&mut self, i: usize, j: usize, dir: Direction) -> bool {
+        match self.state(i, j) {
+            Outside => {
+                let (i, j) = match dir {
+                    Top => (i.wrapping_sub(1), j),
+                    Bottom => (i + 1, j),
+                    Right => (i, j + 1),
+                    Left => (i, j.wrapping_sub(1)),
+                };
+                if self.vis.grid.is_inbounds(i, j) {
+                    match self.state(i, j) {
+                        MainLoop | Inside => false,
+                        Null => {
+                            let idx = self.linear_index(i, j);
+                            self.states[idx] = Outside;
+                            self.try_connect_outside(i, j, dir)
+                        }
+                        Outside => self.try_connect_outside(i, j, dir),
+                    }
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+    pub fn try_connect(&mut self, i: usize, j: usize) {
+        self.try_connect_outside(i, j, Top);
+        self.try_connect_outside(i, j, Bottom);
+        self.try_connect_outside(i, j, Left);
+        self.try_connect_outside(i, j, Right);
+    }
+    // Idempotent
+    pub fn extend_outside(&mut self) {
+        let mut outside = self.indices(Outside);
+        let mut n_old = outside.len();
+        loop {
+            while let Some((i, j)) = outside.pop() {
+                self.try_connect(i, j);
+            }
+            self.indices_mut(&mut outside, Outside);
+            let n = outside.len();
+            if n == n_old {
+                break;
+            } else {
+                n_old = n;
+            }
+        }
+    }
+
+    pub fn enclosed(&self) -> usize {
+        self.states.iter().filter(|x| **x == Inside).count()
+    }
+    fn indices_mut(&self, v: &mut Vec<(usize, usize)>, s: State) {
+        let n_rows = self.vis.grid.n_rows();
+        v.clear();
+        self.states
+            .iter()
+            .enumerate()
+            .filter(move |(_, state)| **state == s)
+            .for_each(move |(idx, _)| {
+                v.push(Grid::cartesian_index(n_rows, idx));
+            });
+    }
+    fn indices(&self, state: State) -> Vec<(usize, usize)> {
+        let mut v = Vec::with_capacity(self.states.len());
+        self.indices_mut(&mut v, state);
+        v
+    }
+    pub fn classify_states(&mut self) {
+        if self.vis.tile != Start {
+            self.main_loop();
+        }
+        self.classify_perimeter();
+        self.extend_outside();
+        let mut unclassified = self.indices(Null);
+        let mut n_old = unclassified.len();
+        loop {
+            while let Some((i, j)) = unclassified.pop() {
+                self.classify_interior(i, j);
+            }
+            self.extend_outside();
+            self.indices_mut(&mut unclassified, Null);
+            let n = unclassified.len();
+            if n == n_old {
+                break;
+            } else {
+                n_old = n;
+            }
+        }
+        for (i, j) in unclassified {
+            let idx = self.linear_index(i, j);
+            self.states[idx] = Inside;
         }
     }
 }
@@ -424,7 +901,7 @@ mod tests {
 .|.|.
 .L-J.
 ";
-        let lhs = s.parse::<Grid<Tile>>().unwrap();
+        let lhs = s.parse::<Grid>().unwrap();
         let rhs = Grid::from_vec(
             vec![
                 Ground, Ground, Ground, Start, Vert, NE, Horz, Ground, Horz, SW, Vert, NW, Ground,
@@ -452,17 +929,17 @@ LJ...";
 
     #[test]
     fn visitor_try_from() {
-        let grid = TEST1.parse::<Grid<Tile>>().unwrap();
+        let grid = TEST1.parse::<Grid>().unwrap();
         let vis = Visitor::try_from(&grid);
         assert!(vis.is_ok());
-        let grid = TEST2.parse::<Grid<Tile>>().unwrap();
+        let grid = TEST2.parse::<Grid>().unwrap();
         let vis = Visitor::try_from(&grid);
         assert!(vis.is_ok());
     }
 
     #[test]
     fn traverse() {
-        let grid = TEST1.parse::<Grid<Tile>>().unwrap();
+        let grid = TEST1.parse::<Grid>().unwrap();
         let mut vis = Visitor::try_from(&grid).unwrap();
         assert_eq!(vis.idx, (2, 1));
         assert_eq!(vis.tile, Vert);
@@ -498,9 +975,101 @@ LJ...";
         assert_eq!(vis.approach, Right);
         assert_eq!(vis.steps, 8);
 
-        let grid = TEST2.parse::<Grid<Tile>>().unwrap();
+        let grid = TEST2.parse::<Grid>().unwrap();
         let mut vis = Visitor::try_from(&grid).unwrap();
         vis.traverse();
         assert_eq!(vis.steps, 16);
+    }
+
+    static TEST3: &str = "\
+...........
+.S-------7.
+.|F-----7|.
+.||.....||.
+.||.....||.
+.|L-7.F-J|.
+.|..|.|..|.
+.L--J.L--J.
+...........";
+
+    static TEST4: &str = "\
+..........
+.S------7.
+.|F----7|.
+.||....||.
+.||....||.
+.|L-7F-J|.
+.|..||..|.
+.L--JL--J.
+..........";
+
+    static TEST5: &str = "\
+.F----7F7F7F7F-7....
+.|F--7||||||||FJ....
+.||.FJ||||||||L7....
+FJL7L7LJLJ||LJ.L-7..
+L--J.L7...LJS7F-7L7.
+....F-J..F7FJ|L7L7L7
+....L7.F7||L7|.L7L7|
+.....|FJLJ|FJ|F7|.LJ
+....FJL-7.||.||||...
+....L---J.LJ.LJLJ...";
+
+    static TEST6: &str = "\
+FF7FSF7F7F7F7F7F---7
+L|LJ||||||||||||F--J
+FL-7LJLJ||||||LJL-77
+F--JF--7||LJLJ7F7FJ-
+L---JF-JLJ.||-FJLJJ7
+|F|F-JF---7F7-L7L|7|
+|FFJF7L7F-JF7|JL---7
+7-L-JL7||F7|L7F-7F7|
+L.L7LFJ|||||FJL7||LJ
+L7JLJL-JLJLJL--JLJ.L";
+    #[test]
+    fn try_bottom() {
+        let grid = TEST4.parse::<Grid>().unwrap();
+        let mut vis = StatefulVisitor::try_from(&grid).unwrap();
+        vis.main_loop();
+        vis.classify_perimeter();
+        assert!(vis.try_bottom(4, 4));
+        vis.classify_interior(4, 4);
+        assert_eq!(vis.state(4, 4), Outside);
+        assert!(vis.try_bottom(4, 5));
+        vis.classify_interior(4, 5);
+        assert_eq!(vis.state(4, 5), Outside);
+        assert!(!vis.classify_interior(6, 3));
+
+        let grid = TEST3.parse::<Grid>().unwrap();
+        let mut vis = StatefulVisitor::try_from(&grid).unwrap();
+        vis.main_loop();
+        // vis.vis.traverse();
+        vis.classify_perimeter();
+    }
+    #[test]
+    fn classify_states() {
+        let grid = TEST3.parse::<Grid>().unwrap();
+        let mut vis = StatefulVisitor::try_from(&grid).unwrap();
+        vis.main_loop();
+        vis.classify_states();
+        assert_eq!(vis.enclosed(), 4);
+
+        let grid = TEST4.parse::<Grid>().unwrap();
+        let mut vis = StatefulVisitor::try_from(&grid).unwrap();
+        vis.main_loop();
+        vis.classify_states();
+        assert_eq!(vis.enclosed(), 4);
+
+        let grid = TEST5.parse::<Grid>().unwrap();
+        let mut vis = StatefulVisitor::try_from(&grid).unwrap();
+        vis.main_loop();
+        vis.classify_states();
+        assert_eq!(vis.enclosed(), 8);
+
+        let grid = TEST6.parse::<Grid>().unwrap();
+        let mut vis = StatefulVisitor::try_from(&grid).unwrap();
+        vis.main_loop();
+        vis.classify_states();
+        assert_eq!(vis.enclosed(), 10);
     }
 }
