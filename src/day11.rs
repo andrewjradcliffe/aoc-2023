@@ -1,13 +1,8 @@
+use std::num::NonZeroUsize;
 use std::ops::{Index, IndexMut};
 use std::path::Path;
 use std::str::FromStr;
 use std::{fmt, fs};
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-// pub enum Element {
-//     Galaxy,
-//     EmptySpace,
-// }
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Grid {
     // Galaxy: true, EmptySpace: false
@@ -20,10 +15,10 @@ impl Grid {
     fn linear_index(&self, i: usize, j: usize) -> usize {
         i + self.n_rows * j
     }
-    #[inline]
-    fn cartesian_index(n_rows: usize, idx: usize) -> (usize, usize) {
-        (idx % n_rows, idx / n_rows)
-    }
+    // #[inline]
+    // fn cartesian_index(n_rows: usize, idx: usize) -> (usize, usize) {
+    //     (idx % n_rows, idx / n_rows)
+    // }
     #[inline]
     pub fn n_rows(&self) -> usize {
         self.n_rows
@@ -187,10 +182,8 @@ impl fmt::Display for Grid {
         Ok(())
     }
 }
-// pub struct Galaxy
 pub struct Galaxies {
     inner: Vec<(usize, usize)>,
-    // grid: &'a Grid,
 }
 impl<'a> From<&'a Grid> for Galaxies {
     fn from(grid: &'a Grid) -> Self {
@@ -229,6 +222,30 @@ impl Galaxies {
     pub fn sum_manhattan_distances(&self) -> usize {
         self.manhattan_distances().into_iter().sum()
     }
+}
+
+pub fn expanded_universe(grid: &Grid, factor: NonZeroUsize) -> Galaxies {
+    let factor = factor.get();
+    let f = factor - 1;
+    let empty_rows = grid.empty_rows();
+    let empty_cols = grid.empty_columns();
+    let galaxies = Galaxies::from(grid);
+    let mut inner = galaxies.inner.clone();
+    for j in empty_cols {
+        for (orig, new) in galaxies.inner.iter().zip(inner.iter_mut()) {
+            if orig.1 > j {
+                new.1 += f;
+            }
+        }
+    }
+    for i in empty_rows {
+        for (orig, new) in galaxies.inner.iter().zip(inner.iter_mut()) {
+            if orig.0 > i {
+                new.0 += f;
+            }
+        }
+    }
+    Galaxies { inner }
 }
 
 #[cfg(test)]
@@ -306,5 +323,15 @@ mod tests {
         grid.expand_empty_columns();
         let galaxies = Galaxies::from(&grid);
         assert_eq!(galaxies.sum_manhattan_distances(), 374);
+    }
+    #[test]
+    fn expanded_universe_works() {
+        let grid = TEST.parse::<Grid>().unwrap();
+        let galaxies = expanded_universe(&grid, NonZeroUsize::new(2).unwrap());
+        assert_eq!(galaxies.sum_manhattan_distances(), 374);
+        let galaxies = expanded_universe(&grid, NonZeroUsize::new(10).unwrap());
+        assert_eq!(galaxies.sum_manhattan_distances(), 1030);
+        let galaxies = expanded_universe(&grid, NonZeroUsize::new(100).unwrap());
+        assert_eq!(galaxies.sum_manhattan_distances(), 8410);
     }
 }
