@@ -229,8 +229,8 @@ impl Galaxies {
 /// It is technically possible to use the ordering of the indices
 /// to do slightly less work, but, there is a real possibility that the
 /// brute force approach will be faster due to it being amenable
-/// to SIMD and leading to an instruction pipeline that should experience
-/// no stalls.
+/// to SIMD, leading to an instruction pipeline that should experience
+/// no stalls, and effectively no branch prediction misses.
 /// To maximize the performance of said brute force, one would want
 /// to change `inner` from `Vec<(usize, usize)>` to `Vec<usize>, Vec<usize>`
 /// (i.e. struct of array rather than array of struct).
