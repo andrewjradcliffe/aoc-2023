@@ -224,6 +224,18 @@ impl Galaxies {
     }
 }
 
+/// This is Θ(m * n) where n is the number of galaxies and m is the greater of
+/// the number of empty columns and number of empty rows.
+/// It is technically possible to use the ordering of the indices
+/// to do slightly less work, but, there is a real possibility that the
+/// brute force approach will be faster due to it being amenable
+/// to SIMD and leading to an instruction pipeline that should experience
+/// no stalls.
+/// To maximize the performance of said brute force, one would want
+/// to change `inner` from `Vec<(usize, usize)>` to `Vec<usize>, Vec<usize>`
+/// (i.e. struct of array rather than array of struct).
+/// Likewise, `galaxies.inner` would benefit from being split into struct of array
+/// (one could re-use a single array for this purpose).
 pub fn expanded_universe(grid: &Grid, factor: NonZeroUsize) -> Galaxies {
     let factor = factor.get();
     let f = factor - 1;
@@ -233,16 +245,22 @@ pub fn expanded_universe(grid: &Grid, factor: NonZeroUsize) -> Galaxies {
     let mut inner = galaxies.inner.clone();
     for j in empty_cols {
         for (orig, new) in galaxies.inner.iter().zip(inner.iter_mut()) {
-            if orig.1 > j {
-                new.1 += f;
-            }
+            // if orig.1 > j {
+            //     new.1 += f;
+            // }
+            // Or, to make it branchless:
+            let s = (orig.1 > j) as usize;
+            new.1 += f * s;
         }
     }
     for i in empty_rows {
         for (orig, new) in galaxies.inner.iter().zip(inner.iter_mut()) {
-            if orig.0 > i {
-                new.0 += f;
-            }
+            // if orig.0 > i {
+            //     new.0 += f;
+            // }
+            // Or, to make it branchless:
+            let s = (orig.0 > i) as usize;
+            new.0 += f * s;
         }
     }
     Galaxies { inner }
