@@ -119,6 +119,82 @@ impl Row {
         }
         Self { left, right }
     }
+    pub fn count_condition(&self, cond: Condition) -> usize {
+        match cond {
+            Damaged => self.left.iter().filter(|cond| cond.is_damaged()).count(),
+            Operational => self
+                .left
+                .iter()
+                .filter(|cond| cond.is_operational())
+                .count(),
+            Unknown => self.left.iter().filter(|cond| cond.is_unknown()).count(),
+        }
+    }
+    pub fn n_damaged(&self) -> usize {
+        self.right.iter().sum()
+    }
+    pub fn starts_with(&self, cond: Condition) -> bool {
+        let n = self.left.len();
+        if n == 0 {
+            false
+        } else {
+            self.left[0] == cond
+        }
+    }
+    pub fn ends_with(&self, cond: Condition) -> bool {
+        let n = self.left.len();
+        if n == 0 {
+            false
+        } else {
+            self.left[n - 1] == cond
+        }
+    }
+    // pub fn trim_contiguous_end(&self) -> Option<Self> {
+    //     if self.ends_with(Damaged) {
+    //         let n = self.left.len();
+    //         let m = self.right.len();
+    //         if m != 0 {
+    //             let contig = self.right[m - 1].clone();
+    //             let a = &self.left[n - contig..n];
+    //             if a.into_iter().all(|x| x.is_damaged()) {
+    //                 let left = self.left[0..n - contig].to_vec();
+    //                 let right = self.right[0..m - 1].to_vec();
+    //                 Some(Self { left, right })
+    //             } else {
+    //                 None
+    //             }
+    //         } else {
+    //             None
+    //         }
+    //     } else {
+    //         None
+    //     }
+    // }
+    // pub fn has_contiguous_end(&self) -> bool {
+    //     if self.ends_with(Damaged) {
+    //         let n = self.left.len();
+    //         let m = self.right.len();
+    //         if m != 0 {
+    //             let contig = self.right[m - 1].clone();
+    //             let a = &self.left[n - contig..n];
+    //             a.into_iter().all(|x| x.is_damaged())
+    //         } else {
+    //             false
+    //         }
+    //     } else {
+    //         false
+    //     }
+    // }
+    pub fn count_damaged_front(&self) -> usize {
+        self.left.iter().take_while(|x| **x == Damaged).count()
+    }
+    pub fn count_damaged_back(&self) -> usize {
+        self.left
+            .iter()
+            .rev()
+            .take_while(|x| **x == Damaged)
+            .count()
+    }
 }
 fn combinations_inner(v: &mut Vec<Vec<usize>>, n: usize, k: usize, len: usize) {
     if len < k {
@@ -291,12 +367,43 @@ impl RowAnalyzer {
         }
     }
 
-    pub fn count_arrangements_with_unfold(&mut self) -> usize {
+    // Too low, and clearly not the approach as it is extremely inefficient
+    pub fn count_arrangements_with_unfold_special(&mut self) -> usize {
         let mut unfolded = RowAnalyzer::from(self.row.unfold(NonZeroUsize::new(2).unwrap()));
         let lhs = self.count_arrangements();
         let both = unfolded.count_arrangements();
         let base = both / lhs;
         lhs * base * base * base * base
+    }
+    // Too high
+    pub fn count_arrangements_with_unfold(&mut self) -> usize {
+        let mut row = self.row.clone();
+        row.left.push(Unknown);
+        let start = self.row.count_damaged_front() != 0;
+        if start {
+            row.left.push(Damaged);
+            row.right.push(1);
+        }
+        let mut tmp = RowAnalyzer::from(row);
+        let first = tmp.count_arrangements();
+        let mut row = tmp.row;
+        row.left.insert(0, Unknown);
+        let end = self.row.count_damaged_back() != 0;
+        if end {
+            row.left.insert(0, Damaged);
+            row.right.insert(0, 1);
+        }
+        let mut tmp = RowAnalyzer::from(row);
+        let mid = tmp.count_arrangements();
+        let mut row = tmp.row;
+        if start {
+            row.left.pop();
+            row.right.pop();
+        }
+        row.left.pop();
+        let mut tmp = RowAnalyzer::from(row);
+        let last = tmp.count_arrangements();
+        first * mid * mid * mid * last
     }
 }
 impl FromStr for RowAnalyzer {
@@ -439,6 +546,10 @@ mod tests {
     }
     #[test]
     fn count_arrangements_with_unfold() {
+        let s = "???.### 1,1,3";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements_with_unfold(), 1);
+
         let s = ".??..??...?##. 1,1,3";
         let mut x = s.parse::<RowAnalyzer>().unwrap();
         assert_eq!(x.count_arrangements_with_unfold(), 16384);
