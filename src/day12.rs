@@ -151,6 +151,9 @@ pub fn combinations(n: usize, k: usize) -> Vec<Vec<usize>> {
     v
 }
 
+/*
+Variable-base positional number system representation.
+*/
 #[derive(Debug, Clone)]
 pub struct Combinations {
     n: usize,
@@ -159,7 +162,9 @@ pub struct Combinations {
     initial: bool,
 }
 impl Combinations {
+    /// Panics if `k > n`.
     pub fn new(n: usize, k: usize) -> Self {
+        assert!(k <= n);
         let mut inner = Vec::with_capacity(k);
         for i in 0..k {
             inner.push(i);
@@ -174,23 +179,27 @@ impl Combinations {
     pub fn is_done(&self) -> bool {
         self.k == 0 || self.n == 0 || self.inner[0] > self.n - self.k
     }
+    /*
+    This will never overflow as the maximum value of `n` is `usize::MAX`, and
+    the value at the last index is at most `n - 1`, hence, incrementing it
+    by 1 will never result in wrapping around to `0`.
+    N.B. the maximum value of `len + j` is `n - k + 1 + (k - 1) = n`.
+     */
     pub fn next_combination_mut(&mut self) {
         if self.is_done() {
             return ();
         }
-        let mut i = self.k - 1;
-        let mut offset = 1;
-        self.inner[i] += 1;
-        while self.inner[i] > self.n - offset && i != 0 {
-            self.inner[i] = 0;
-            offset += 1;
-            i -= 1;
-            self.inner[i] += 1;
+        let mut j = self.k - 1;
+        let len = self.n - self.k + 1;
+        self.inner[j] += 1;
+        while self.inner[j] == len + j && j != 0 {
+            j -= 1;
+            self.inner[j] += 1;
         }
-        i += 1;
-        while i < self.k {
-            self.inner[i] = self.inner[i - 1] + 1;
-            i += 1;
+        j += 1;
+        while j < self.k {
+            self.inner[j] = self.inner[j - 1] + 1;
+            j += 1;
         }
     }
     pub fn next_combination(&mut self) -> Option<Vec<usize>> {
@@ -206,6 +215,13 @@ impl Combinations {
             } else {
                 Some(self.inner.clone())
             }
+        }
+    }
+    pub fn reset(&mut self) {
+        self.initial = true;
+        // self.inner.iter_mut().enumerate().for_each(|(i, v)| *v = i);
+        for i in 0..self.k {
+            self.inner[i] = i;
         }
     }
 }
@@ -268,7 +284,11 @@ impl RowAnalyzer {
         for i in self.unknowns.iter() {
             self.row.left[*i] = Unknown;
         }
-        sum
+        if sum == 0 {
+            1
+        } else {
+            sum
+        }
     }
 
     pub fn count_arrangements_with_unfold(&mut self) -> usize {
