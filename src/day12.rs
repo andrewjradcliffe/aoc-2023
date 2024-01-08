@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -95,6 +96,28 @@ impl Row {
         }
         true
         // contig == self.right
+    }
+    pub fn unfold(&self, m: NonZeroUsize) -> Self {
+        let m = m.get();
+        let n = self.right.len();
+        let mut right = Vec::with_capacity(m * n);
+        for _ in 0..m {
+            for item in self.right.iter() {
+                right.push(item.clone());
+            }
+        }
+        let n = self.left.len();
+        let mut left = Vec::with_capacity(m * n + m - 1);
+        for _ in 0..m - 1 {
+            for item in self.left.iter() {
+                left.push(item.clone());
+            }
+            left.push(Unknown);
+        }
+        for item in self.left.iter() {
+            left.push(item.clone());
+        }
+        Self { left, right }
     }
 }
 fn combinations_inner(v: &mut Vec<Vec<usize>>, n: usize, k: usize, len: usize) {
@@ -247,6 +270,14 @@ impl RowAnalyzer {
         }
         sum
     }
+
+    pub fn count_arrangements_with_unfold(&mut self) -> usize {
+        let mut unfolded = RowAnalyzer::from(self.row.unfold(NonZeroUsize::new(2).unwrap()));
+        let lhs = self.count_arrangements();
+        let both = unfolded.count_arrangements();
+        let base = both / lhs;
+        lhs * base * base * base * base
+    }
 }
 impl FromStr for RowAnalyzer {
     type Err = String;
@@ -360,22 +391,52 @@ mod tests {
 
         let s = ".??..??...?##. 1,1,3";
         let mut x = s.parse::<RowAnalyzer>().unwrap();
-        assert_eq!(x.count_arrangements(), 4, "{:#?}", x);
+        assert_eq!(x.count_arrangements(), 4);
 
         let s = "?#?#?#?#?#?#?#? 1,3,1,6";
         let mut x = s.parse::<RowAnalyzer>().unwrap();
-        assert_eq!(x.count_arrangements(), 1, "{:#?}", x);
+        assert_eq!(x.count_arrangements(), 1);
 
         let s = "????.#...#... 4,1,1";
         let mut x = s.parse::<RowAnalyzer>().unwrap();
-        assert_eq!(x.count_arrangements(), 1, "{:#?}", x);
+        assert_eq!(x.count_arrangements(), 1);
 
         let s = "????.######..#####. 1,6,5";
         let mut x = s.parse::<RowAnalyzer>().unwrap();
-        assert_eq!(x.count_arrangements(), 4, "{:#?}", x);
+        assert_eq!(x.count_arrangements(), 4);
 
         let s = "?###???????? 3,2,1";
         let mut x = s.parse::<RowAnalyzer>().unwrap();
-        assert_eq!(x.count_arrangements(), 10, "{:#?}", x);
+        assert_eq!(x.count_arrangements(), 10);
+
+        let s = "?###??????????###???????? 3,2,1,3,2,1";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements(), 150);
+
+        // let s = "?###??????????###??????????###???????? 3,2,1,3,2,1,3,2,1";
+        // let mut x = s.parse::<RowAnalyzer>().unwrap();
+        // assert_eq!(x.count_arrangements(), 2250, "{:#?}", x);
+    }
+    #[test]
+    fn count_arrangements_with_unfold() {
+        let s = ".??..??...?##. 1,1,3";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements_with_unfold(), 16384);
+
+        let s = "?#?#?#?#?#?#?#? 1,3,1,6";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements_with_unfold(), 1);
+
+        let s = "????.#...#... 4,1,1";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements_with_unfold(), 16);
+
+        let s = "????.######..#####. 1,6,5";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements_with_unfold(), 2500);
+
+        let s = "?###???????? 3,2,1";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements_with_unfold(), 506250);
     }
 }
