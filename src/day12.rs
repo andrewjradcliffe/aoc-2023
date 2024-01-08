@@ -128,6 +128,71 @@ pub fn combinations(n: usize, k: usize) -> Vec<Vec<usize>> {
     v
 }
 
+#[derive(Debug, Clone)]
+pub struct Combinations {
+    n: usize,
+    k: usize,
+    inner: Vec<usize>,
+    initial: bool,
+}
+impl Combinations {
+    pub fn new(n: usize, k: usize) -> Self {
+        let mut inner = Vec::with_capacity(k);
+        for i in 0..k {
+            inner.push(i);
+        }
+        Self {
+            n,
+            k,
+            inner,
+            initial: true,
+        }
+    }
+    pub fn is_done(&self) -> bool {
+        self.k == 0 || self.n == 0 || self.inner[0] > self.n - self.k
+    }
+    pub fn next_combination_mut(&mut self) {
+        if self.is_done() {
+            return ();
+        }
+        let mut i = self.k - 1;
+        let mut offset = 1;
+        self.inner[i] += 1;
+        while self.inner[i] > self.n - offset && i != 0 {
+            self.inner[i] = 0;
+            offset += 1;
+            i -= 1;
+            self.inner[i] += 1;
+        }
+        i += 1;
+        while i < self.k {
+            self.inner[i] = self.inner[i - 1] + 1;
+            i += 1;
+        }
+    }
+    pub fn next_combination(&mut self) -> Option<Vec<usize>> {
+        if self.initial {
+            self.initial = false;
+            Some(self.inner.clone())
+        } else if self.is_done() {
+            None
+        } else {
+            self.next_combination_mut();
+            if self.is_done() {
+                None
+            } else {
+                Some(self.inner.clone())
+            }
+        }
+    }
+}
+impl Iterator for Combinations {
+    type Item = Vec<usize>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_combination()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RowAnalyzer {
     row: Row,
@@ -161,19 +226,20 @@ impl From<Row> for RowAnalyzer {
 impl RowAnalyzer {
     pub fn count_arrangements(&mut self) -> usize {
         let n_unknown = self.unknowns.len();
-        let proposals = combinations(n_unknown, self.k_damaged);
+        let mut comb = Combinations::new(n_unknown, self.k_damaged);
         let mut sum: usize = 0;
-        for proposal in proposals {
+        while !comb.is_done() {
             // Set base state
             for i in self.unknowns.iter() {
                 self.row.left[*i] = Operational;
             }
             // Set flag
-            for i in proposal {
-                let idx = self.unknowns[i];
+            for i in comb.inner.iter() {
+                let idx = self.unknowns[*i];
                 self.row.left[idx] = Damaged;
             }
             sum += self.row.is_feasible() as usize;
+            comb.next_combination_mut();
         }
         // Reset to original state
         for i in self.unknowns.iter() {
@@ -261,6 +327,30 @@ mod tests {
         let x = combinations(10, 7);
         assert_eq!(x.len(), 120);
     }
+    #[test]
+    fn combination_iter_works() {
+        for (n, k) in [
+            (0, 0),
+            (3, 0),
+            (2, 1),
+            (3, 2),
+            (4, 1),
+            (4, 2),
+            (4, 4),
+            (5, 3),
+            (7, 3),
+            (7, 4),
+            (10, 7),
+        ] {
+            let mut x = combinations(n, k);
+            x.sort_unstable();
+            let comb = Combinations::new(n, k);
+            let mut y: Vec<_> = comb.collect();
+            y.sort_unstable();
+            assert_eq!(x, y);
+        }
+    }
+
     #[test]
     fn count_arrangements() {
         let s = "???.### 1,1,3";
