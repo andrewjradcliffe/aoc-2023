@@ -5,8 +5,10 @@ fn main() {
     let mut args = env::args();
     match args.nth(1) {
         Some(path) => match grids_from_path(path) {
-            Ok(grids) => {
-                let sum = sum_reflections(&grids);
+            Ok(mut grids) => {
+                let sum = sum_reflections_part1(&mut grids);
+                println!("{}", sum);
+                let sum = sum_reflections_part2(&mut grids);
                 println!("{}", sum);
             }
             Err(e) => println!("{:#?}", e),

@@ -9,6 +9,15 @@ pub enum Reflection {
     Vertical(usize),
     Horizontal(usize),
 }
+use Reflection::*;
+impl Reflection {
+    pub fn inc(&self) -> Self {
+        match self {
+            Vertical(n) => Vertical(n + 1),
+            Horizontal(n) => Horizontal(n + 1),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Grid {
@@ -48,14 +57,6 @@ impl Grid {
             n_cols: n_rows,
         }
     }
-    pub fn from_vec(v: Vec<bool>, n_rows: usize, n_cols: usize) -> Self {
-        assert_eq!(v.len(), n_rows * n_cols);
-        Grid {
-            inner: v,
-            n_rows,
-            n_cols,
-        }
-    }
 
     pub fn are_columns_equal(&self, j0: usize, j1: usize) -> bool {
         let n_rows = self.n_rows();
@@ -78,10 +79,9 @@ impl Grid {
     yielding O(n^3). A simple way to keep it O(n^2) is to compute a of each column,
     which would be an O(n^2) operation by itself, but, obviously, worthwhile.
      */
-    pub fn find_reflection_vertical(&self) -> Option<usize> {
+    fn find_vertical_bounded(&self, start: usize, end: usize) -> Option<usize> {
         let n_cols = self.n_cols();
-        let mut start: usize = 0;
-        let end = n_cols - 1;
+        let mut start = start;
         while start < end {
             if let Some(j) = (start..end).find(|&j| self.are_columns_equal(j, j + 1)) {
                 let left = (0..j).rev();
@@ -97,10 +97,13 @@ impl Grid {
         }
         None
     }
-    pub fn find_reflection_horizontal(&self) -> Option<usize> {
+
+    pub fn find_reflection_vertical(&self) -> Option<usize> {
+        self.find_vertical_bounded(0, self.n_cols - 1)
+    }
+    fn find_horizontal_bounded(&self, start: usize, end: usize) -> Option<usize> {
         let n_rows = self.n_rows();
-        let mut start: usize = 0;
-        let end = n_rows - 1;
+        let mut start = start;
         while start < end {
             if let Some(i) = (start..end).find(|&i| self.are_rows_equal(i, i + 1)) {
                 let above = (0..i).rev();
@@ -116,15 +119,103 @@ impl Grid {
         }
         None
     }
-
-    pub fn find_reflection(&self) -> Option<Reflection> {
+    pub fn find_reflection_horizontal(&self) -> Option<usize> {
+        self.find_horizontal_bounded(0, self.n_rows - 1)
+    }
+    fn find_reflection_imp(&self) -> Option<Reflection> {
         if let Some(n) = self.find_reflection_vertical() {
-            Some(Reflection::Vertical(n + 1))
+            Some(Vertical(n))
         } else if let Some(n) = self.find_reflection_horizontal() {
-            Some(Reflection::Horizontal(n + 1))
+            Some(Horizontal(n))
         } else {
             None
         }
+    }
+
+    pub fn find_reflection(&self) -> Option<Reflection> {
+        self.find_reflection_imp().map(|n| n.inc())
+    }
+
+    pub fn find_reflection_vertical_avoid(&self, avoid: usize) -> Option<usize> {
+        let actual_end = self.n_cols - 1;
+        let end = avoid.min(actual_end);
+        self.find_vertical_bounded(0, end)
+            .or_else(|| self.find_vertical_bounded(avoid + 1, actual_end))
+        // if let Some(i) = self.find_vertical_bounded(0, end) {
+        //     Some(i)
+        // } else if let Some(i) = self.find_vertical_bounded(avoid + 1, actual_end) {
+        //     Some(i)
+        // } else {
+        //     None
+        // }
+    }
+    pub fn find_reflection_horizontal_avoid(&self, avoid: usize) -> Option<usize> {
+        let actual_end = self.n_rows - 1;
+        let end = avoid.min(actual_end);
+        self.find_horizontal_bounded(0, end)
+            .or_else(|| self.find_horizontal_bounded(avoid + 1, actual_end))
+        // if let Some(i) = self.find_horizontal_bounded(0, end) {
+        //     return Some(i);
+        // }
+        // if let Some(i) = self.find_horizontal_bounded(avoid + 1, actual_end) {
+        //     return Some(i);
+        // }
+        // None
+    }
+    fn branch(&self, x: &Reflection) -> Option<Reflection> {
+        match x {
+            Vertical(n) => {
+                // if let Some(i) = self.find_reflection_horizontal_avoid(*n) {
+                //     Some(Horizontal(i))
+                // } else {
+                //     match self.find_reflection_vertical_avoid(*n) {
+                //         Some(j) if *n != j => Some(Vertical(j)),
+                //         _ => None,
+                //     }
+                // }
+                self.find_reflection_horizontal_avoid(*n)
+                    .map(Horizontal)
+                    .or_else(|| self.find_reflection_vertical_avoid(*n).map(Vertical))
+            }
+            Horizontal(n) => {
+                // if let Some(j) = self.find_reflection_vertical_avoid(*n) {
+                //     Some(Vertical(j))
+                // } else {
+                //     match self.find_reflection_horizontal_avoid(*n) {
+                //         Some(i) if *n != i => Some(Horizontal(i)),
+                //         _ => None,
+                //     }
+                // }
+                self.find_reflection_vertical_avoid(*n)
+                    .map(Vertical)
+                    .or_else(|| self.find_reflection_horizontal_avoid(*n).map(Horizontal))
+            }
+        }
+    }
+
+    fn find_smudged_reflection_imp(&mut self) -> Reflection {
+        let x = self.find_reflection_imp().unwrap();
+        let n = self.inner.len();
+        self.inner[0] ^= true;
+        let mut i: usize = 1;
+        if let Some(y) = self.branch(&x) {
+            self.inner[0] ^= true;
+            return y;
+        }
+        while i < n {
+            self.inner[i - 1] ^= true;
+            self.inner[i] ^= true;
+            i += 1;
+            if let Some(y) = self.branch(&x) {
+                self.inner[i - 1] ^= true;
+                return y;
+            }
+        }
+        self.inner[i - 1] ^= true;
+        x
+    }
+    pub fn find_smudged_reflection(&mut self) -> Reflection {
+        self.find_smudged_reflection_imp().inc()
     }
 }
 impl Index<(usize, usize)> for Grid {
@@ -206,14 +297,23 @@ pub fn grids_from_path<T: AsRef<Path>>(path: T) -> Result<Vec<Grid>, String> {
     grids_from_str(&s)
 }
 
-pub fn sum_reflections(grids: &[Grid]) -> usize {
+pub fn sum_reflections<F>(f: F, grids: &mut [Grid]) -> usize
+where
+    F: FnMut(&mut Grid) -> Option<Reflection>,
+{
     grids
         .into_iter()
-        .filter_map(|x| x.find_reflection())
+        .filter_map(f)
         .fold(0usize, |acc, x| match x {
-            Reflection::Vertical(n) => acc + n,
-            Reflection::Horizontal(n) => acc + 100 * n,
+            Vertical(n) => acc + n,
+            Horizontal(n) => acc + 100 * n,
         })
+}
+pub fn sum_reflections_part1(grids: &mut [Grid]) -> usize {
+    sum_reflections(|x| x.find_reflection(), grids)
+}
+pub fn sum_reflections_part2(grids: &mut [Grid]) -> usize {
+    sum_reflections(|x| Some(x.find_smudged_reflection()), grids)
 }
 
 #[cfg(test)]
@@ -295,7 +395,19 @@ mod tests {
 
     #[test]
     fn sum_reflections_works() {
-        let grids = grids_from_str(TEST).unwrap();
-        assert_eq!(sum_reflections(&grids), 405);
+        let mut grids = grids_from_str(TEST).unwrap();
+        assert_eq!(sum_reflections_part1(&mut grids), 405);
+        assert_eq!(sum_reflections_part2(&mut grids), 400);
+    }
+
+    #[test]
+    fn fix_smudge() {
+        let mut x = VERT.parse::<Grid>().unwrap();
+        let lhs = x.find_smudged_reflection();
+        assert_eq!(lhs, Horizontal(3), "\n{}", x);
+
+        let mut x = HORZ.parse::<Grid>().unwrap();
+        let lhs = x.find_smudged_reflection();
+        assert_eq!(lhs, Horizontal(1), "\n{}", x);
     }
 }
