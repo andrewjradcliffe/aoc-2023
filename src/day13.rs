@@ -141,77 +141,39 @@ impl Grid {
         let end = avoid.min(actual_end);
         self.find_vertical_bounded(0, end)
             .or_else(|| self.find_vertical_bounded(avoid + 1, actual_end))
-        // if let Some(i) = self.find_vertical_bounded(0, end) {
-        //     Some(i)
-        // } else if let Some(i) = self.find_vertical_bounded(avoid + 1, actual_end) {
-        //     Some(i)
-        // } else {
-        //     None
-        // }
     }
     pub fn find_reflection_horizontal_avoid(&self, avoid: usize) -> Option<usize> {
         let actual_end = self.n_rows - 1;
         let end = avoid.min(actual_end);
         self.find_horizontal_bounded(0, end)
             .or_else(|| self.find_horizontal_bounded(avoid + 1, actual_end))
-        // if let Some(i) = self.find_horizontal_bounded(0, end) {
-        //     return Some(i);
-        // }
-        // if let Some(i) = self.find_horizontal_bounded(avoid + 1, actual_end) {
-        //     return Some(i);
-        // }
-        // None
     }
     fn branch(&self, x: &Reflection) -> Option<Reflection> {
         match x {
-            Vertical(n) => {
-                // if let Some(i) = self.find_reflection_horizontal_avoid(*n) {
-                //     Some(Horizontal(i))
-                // } else {
-                //     match self.find_reflection_vertical_avoid(*n) {
-                //         Some(j) if *n != j => Some(Vertical(j)),
-                //         _ => None,
-                //     }
-                // }
-                self.find_reflection_horizontal_avoid(*n)
-                    .map(Horizontal)
-                    .or_else(|| self.find_reflection_vertical_avoid(*n).map(Vertical))
-            }
-            Horizontal(n) => {
-                // if let Some(j) = self.find_reflection_vertical_avoid(*n) {
-                //     Some(Vertical(j))
-                // } else {
-                //     match self.find_reflection_horizontal_avoid(*n) {
-                //         Some(i) if *n != i => Some(Horizontal(i)),
-                //         _ => None,
-                //     }
-                // }
-                self.find_reflection_vertical_avoid(*n)
-                    .map(Vertical)
-                    .or_else(|| self.find_reflection_horizontal_avoid(*n).map(Horizontal))
-            }
+            Vertical(n) => self
+                .find_reflection_horizontal()
+                .map(Horizontal)
+                .or_else(|| self.find_reflection_vertical_avoid(*n).map(Vertical)),
+            Horizontal(n) => self
+                .find_reflection_vertical()
+                .map(Vertical)
+                .or_else(|| self.find_reflection_horizontal_avoid(*n).map(Horizontal)),
         }
     }
 
     fn find_smudged_reflection_imp(&mut self) -> Reflection {
         let x = self.find_reflection_imp().unwrap();
         let n = self.inner.len();
-        self.inner[0] ^= true;
-        let mut i: usize = 1;
-        if let Some(y) = self.branch(&x) {
-            self.inner[0] ^= true;
-            return y;
-        }
+        let mut i: usize = 0;
         while i < n {
-            self.inner[i - 1] ^= true;
             self.inner[i] ^= true;
-            i += 1;
             if let Some(y) = self.branch(&x) {
-                self.inner[i - 1] ^= true;
+                self.inner[i] ^= true;
                 return y;
             }
+            self.inner[i] ^= true;
+            i += 1;
         }
-        self.inner[i - 1] ^= true;
         x
     }
     pub fn find_smudged_reflection(&mut self) -> Reflection {
