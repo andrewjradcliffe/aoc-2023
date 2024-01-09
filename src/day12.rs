@@ -217,6 +217,31 @@ pub fn combinations(n: usize, k: usize) -> Vec<Vec<usize>> {
     }
     v
 }
+/// Works for `n <= 62` and any `k`.
+pub fn binomial(n: u64, k: u64) -> u64 {
+    if n < k {
+        0
+    } else {
+        let mut m = n - k;
+        let mut p = 1;
+        let mut i: u64 = 0;
+        while i < k {
+            i += 1;
+            m += 1;
+            p = m * p / i;
+        }
+        p
+    }
+    // let mut m = n.wrapping_sub(k);
+    // let mut p = 1;
+    // let mut i: u64 = 0;
+    // while i < k {
+    //     i = i.wrapping_add(1);
+    //     m = m.wrapping_add(1);
+    //     p = m.wrapping_mul(p).wrapping_div(i);
+    // }
+    // p
+}
 
 /*
 Variable-base positional number system representation.
@@ -518,6 +543,18 @@ mod tests {
         assert!(!s.parse::<Row>().unwrap().is_feasible());
         let s = ".##.......###. 1,1,3";
         assert!(!s.parse::<Row>().unwrap().is_feasible());
+    }
+
+    #[test]
+    fn binomial_works() {
+        assert_eq!(binomial(0, 0), 1);
+        assert_eq!(binomial(3, 4), 0);
+        assert_eq!(binomial(7, 17), 0);
+        assert_eq!(binomial(5, 0), 1);
+        assert_eq!(binomial(7, 3), 35);
+        assert_eq!(binomial(50, 11), 37353738800);
+        assert_eq!(binomial(61, 30), 232714176627630544);
+        assert_eq!(binomial(62, 31), 465428353255261088);
     }
 
     #[test]
