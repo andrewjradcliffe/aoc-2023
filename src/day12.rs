@@ -367,42 +367,101 @@ impl RowAnalyzer {
         }
     }
 
-    // Too low, and clearly not the approach as it is extremely inefficient
-    pub fn count_arrangements_with_unfold_special(&mut self) -> usize {
-        let mut unfolded = RowAnalyzer::from(self.row.unfold(NonZeroUsize::new(2).unwrap()));
-        let lhs = self.count_arrangements();
-        let both = unfolded.count_arrangements();
-        let base = both / lhs;
-        lhs * base * base * base * base
-    }
     // Too high
+    // pub fn count_arrangements_with_unfold(&mut self) -> usize {
+    //     let mut row = self.row.clone();
+    //     row.left.push(Unknown);
+    //     let mut tmp = RowAnalyzer::from(row);
+    //     let first = tmp.count_arrangements();
+    //     let mut row = tmp.row;
+    //     row.left.insert(0, Unknown);
+    //     let end = self.row.count_damaged_back() != 0;
+    //     if end {
+    //         row.left.insert(0, Damaged);
+    //         row.right.insert(0, 1);
+    //     }
+    //     let start = self.row.count_damaged_front() != 0;
+    //     if start {
+    //         row.left.push(Damaged);
+    //         row.right.push(1);
+    //     }
+    //     let mut tmp = RowAnalyzer::from(row);
+    //     let mid = tmp.count_arrangements();
+    //     let mut row = tmp.row;
+    //     if start {
+    //         row.left.pop();
+    //         row.right.pop();
+    //     }
+    //     row.left.pop();
+    //     let mut tmp = RowAnalyzer::from(row);
+    //     let last = tmp.count_arrangements();
+    //     first * mid * mid * mid * last
+    // }
+
+    // More nuanced attempt
     pub fn count_arrangements_with_unfold(&mut self) -> usize {
         let mut row = self.row.clone();
+        let m = row.right.len();
         row.left.push(Unknown);
-        let start = self.row.count_damaged_front() != 0;
-        if start {
-            row.left.push(Damaged);
-            row.right.push(1);
-        }
         let mut tmp = RowAnalyzer::from(row);
-        let first = tmp.count_arrangements();
+        let mut first = tmp.count_arrangements();
         let mut row = tmp.row;
         row.left.insert(0, Unknown);
-        let end = self.row.count_damaged_back() != 0;
-        if end {
-            row.left.insert(0, Damaged);
-            row.right.insert(0, 1);
-        }
-        let mut tmp = RowAnalyzer::from(row);
-        let mid = tmp.count_arrangements();
-        let mut row = tmp.row;
-        if start {
-            row.left.pop();
-            row.right.pop();
+        let has = self.row.count_damaged_back();
+        if has != 0 {
+            let need = self.row.right[m - 1];
+            let size = need - has;
+            if size != 0 {
+                for _ in 0..has {
+                    row.left.insert(0, Damaged);
+                }
+                for _ in 0..size {
+                    row.left.insert(0, Unknown);
+                }
+                row.right.insert(0, need);
+                let mut r = self.row.clone();
+                for _ in 0..need {
+                    r.left.pop();
+                }
+                r.right.pop();
+                let mut tmp = RowAnalyzer::from(r);
+                first = tmp.count_arrangements();
+            } else {
+                row.left.insert(0, Damaged);
+                row.right.insert(0, 1);
+            }
         }
         row.left.pop();
         let mut tmp = RowAnalyzer::from(row);
-        let last = tmp.count_arrangements();
+        let mut last = tmp.count_arrangements();
+        let mut row = tmp.row;
+        row.left.push(Unknown);
+        let has = self.row.count_damaged_front();
+        if has != 0 {
+            let need = self.row.right[0];
+            let size = need - has;
+            if size != 0 {
+                for _ in 0..has {
+                    row.left.push(Damaged);
+                }
+                for _ in 0..size {
+                    row.left.push(Unknown);
+                }
+                row.right.push(need);
+                let mut r = self.row.clone();
+                for _ in 0..need {
+                    r.left.remove(0);
+                }
+                r.right.remove(0);
+                let mut tmp = RowAnalyzer::from(r);
+                last = tmp.count_arrangements();
+            } else {
+                row.left.push(Damaged);
+                row.right.push(1);
+            }
+        }
+        let mut tmp = RowAnalyzer::from(row);
+        let mid = tmp.count_arrangements();
         first * mid * mid * mid * last
     }
 }
