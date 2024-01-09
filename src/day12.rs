@@ -62,7 +62,6 @@ impl FromStr for Row {
 
 impl Row {
     pub fn is_feasible(&self) -> bool {
-        // let mut contig = Vec::with_capacity(self.right.len());
         let mut contig_iter = self.right.iter();
         let mut iter = self.left.iter().enumerate();
         while let Some((i, cond)) = iter.next() {
@@ -72,22 +71,15 @@ impl Row {
                     let mut right = i + 1;
                     while let Some((_, cond)) = iter.next() {
                         match cond {
-                            Damaged => {
-                                right += 1;
-                            }
-                            Operational => {
-                                break;
-                            }
+                            Damaged => right += 1,
+                            Operational => break,
                             Unknown => return false,
                         }
                     }
                     // Early exit, and avoid allocation
-                    if let Some(size) = contig_iter.next() {
-                        if right - left != *size {
-                            return false;
-                        }
-                    } else {
-                        return false;
+                    match contig_iter.next() {
+                        Some(size) if right - left == *size => (),
+                        _ => return false,
                     }
                 }
                 Operational => (),
@@ -95,7 +87,6 @@ impl Row {
             }
         }
         true
-        // contig == self.right
     }
     pub fn unfold(&self, m: NonZeroUsize) -> Self {
         let m = m.get();
@@ -318,7 +309,7 @@ pub struct RowAnalyzer {
 }
 impl From<Row> for RowAnalyzer {
     fn from(row: Row) -> Self {
-        let n_damaged = row.right.iter().sum::<usize>();
+        let n_damaged = row.n_damaged();
         let unknowns: Vec<_> = row
             .left
             .iter()
@@ -326,7 +317,7 @@ impl From<Row> for RowAnalyzer {
             .filter(|(_, cond)| cond.is_unknown())
             .map(|(i, _)| i)
             .collect();
-        let k_damaged = n_damaged - row.left.iter().filter(|cond| cond.is_damaged()).count();
+        let k_damaged = n_damaged - row.count_condition(Damaged);
         // let n_unknown = unknowns.len();
         Self {
             row,
@@ -602,6 +593,26 @@ mod tests {
         // let s = "?###??????????###??????????###???????? 3,2,1,3,2,1,3,2,1";
         // let mut x = s.parse::<RowAnalyzer>().unwrap();
         // assert_eq!(x.count_arrangements(), 2250, "{:#?}", x);
+
+        let s = "?.???# 1,2";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements(), 2);
+        let s = "?.???#??.???# 1,2,1,2";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements(), 8);
+        let s = "?.???#??.???#??.???# 1,2,1,2,1,2";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements(), 32);
+
+        let s = "??.???#? 1,2";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements(), 7);
+        let s = "?.???#? 1,2";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements(), 5);
+        let s = "??.???# 1,2";
+        let mut x = s.parse::<RowAnalyzer>().unwrap();
+        assert_eq!(x.count_arrangements(), 3);
     }
     #[test]
     fn count_arrangements_with_unfold() {
