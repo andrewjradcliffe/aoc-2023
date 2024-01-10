@@ -15,17 +15,21 @@ pub struct Grid<T> {
 
 impl<T> Grid<T> {
     #[inline]
-    fn linear_index(&self, i: usize, j: usize) -> usize {
+    pub fn linear_index(&self, i: usize, j: usize) -> usize {
         i + self.n_rows * j
     }
     #[inline]
-    fn linear_index_tr(&self, i: usize, j: usize) -> usize {
+    pub fn linear_index_tr(&self, i: usize, j: usize) -> usize {
         i * self.n_cols + j
     }
-    #[inline]
-    fn cartesian_index(n_rows: usize, idx: usize) -> (usize, usize) {
-        (idx % n_rows, idx / n_rows)
-    }
+    // #[inline]
+    // fn cartesian_index(n_rows: usize, idx: usize) -> (usize, usize) {
+    //     (idx % n_rows, idx / n_rows)
+    // }
+    // #[inline]
+    // fn cartesian_index_tr(n_cols: usize, idx: usize) -> (usize, usize) {
+    //     (idx / n_cols, idx % n_cols)
+    // }
     #[inline]
     pub fn n_rows(&self) -> usize {
         self.n_rows
