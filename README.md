@@ -1,6 +1,4 @@
-# Advent of Code, 2023
-
-Hmm, what?
+# Hmm, what?
 
 ## For first-timers
 ```bash
