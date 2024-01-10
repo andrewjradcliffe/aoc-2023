@@ -87,6 +87,20 @@ impl<T: Clone> Grid<T> {
         }
     }
 }
+impl<T: Default> Grid<T> {
+    pub fn new_default(n_rows: usize, n_cols: usize) -> Self {
+        let n = n_rows * n_cols;
+        let mut inner = Vec::with_capacity(n);
+        for _ in 0..n {
+            inner.push(T::default());
+        }
+        Self {
+            inner,
+            n_rows,
+            n_cols,
+        }
+    }
+}
 
 impl<T: fmt::Display> fmt::Display for Grid<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
