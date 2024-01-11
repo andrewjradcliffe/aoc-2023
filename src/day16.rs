@@ -88,26 +88,22 @@ impl fmt::Display for Elem {
 pub struct Contraption(Grid<Elem>);
 
 impl Contraption {
-    pub fn ray_trace(&self) -> Grid<bool> {
+    pub fn ray_trace(&self) -> Grid<Mark> {
         if self.0.len() == 0 {
             Grid::new_default(0, 0)
         } else {
             let (n_rows, n_cols) = self.0.shape();
-            let mut rhs = Grid::new_default(n_rows, n_cols);
-            rhs[(0, 0)] = true;
-            let grid = Rc::new(RefCell::new(rhs));
             let states = Rc::new(RefCell::new(Grid::new_default(n_rows, n_cols)));
             {
                 let mut tracer = Tracer {
                     current: (0, 0),
                     dir: Right,
                     layout: &self.0,
-                    energized: Rc::clone(&grid),
                     states: Rc::clone(&states),
                 };
                 tracer.trace();
             }
-            Rc::into_inner(grid).unwrap().into_inner()
+            Rc::into_inner(states).unwrap().into_inner()
         }
     }
     pub fn from_path<T: AsRef<Path>>(path: T) -> Result<Self, String> {
@@ -121,29 +117,15 @@ impl Contraption {
             self.ray_trace()
                 .inner
                 .into_iter()
-                .fold(0usize, |acc, x| acc + x as usize)
+                .fold(0usize, |acc, x| acc + x.any() as usize)
         }
     }
-    fn ray_trace_imp(
-        &self,
-        i: usize,
-        j: usize,
-        dir: Direction,
-        energized: Rc<RefCell<Grid<bool>>>,
-        states: Rc<RefCell<Grid<Mark>>>,
-    ) {
-        energized
-            .borrow_mut()
-            .inner
-            .iter_mut()
-            .for_each(|x| *x = false);
+    fn ray_trace_imp(&self, i: usize, j: usize, dir: Direction, states: Rc<RefCell<Grid<Mark>>>) {
         states.borrow_mut().inner.iter_mut().for_each(|x| x.reset());
-        energized.borrow_mut()[(i, j)] = true;
         let mut tracer = Tracer {
             current: (i, j),
             dir,
             layout: &self.0,
-            energized,
             states,
         };
         tracer.trace();
@@ -153,30 +135,29 @@ impl Contraption {
             0
         } else {
             let (n_rows, n_cols) = self.0.shape();
-            let grid = Rc::new(RefCell::new(Grid::new_default(n_rows, n_cols)));
             let states = Rc::new(RefCell::new(Grid::new_default(n_rows, n_cols)));
             let mut mx: usize = 0;
             let right = n_cols - 1;
             let bottom = n_rows - 1;
             for (dir, j) in [(Right, 0), (Left, right)] {
                 for i in 0..n_rows {
-                    self.ray_trace_imp(i, j, dir, Rc::clone(&grid), Rc::clone(&states));
-                    let total = grid
+                    self.ray_trace_imp(i, j, dir, Rc::clone(&states));
+                    let total = states
                         .borrow()
                         .inner
                         .iter()
-                        .fold(0usize, |acc, x| acc + *x as usize);
+                        .fold(0usize, |acc, x| acc + x.any() as usize);
                     mx = mx.max(total);
                 }
             }
             for (dir, i) in [(Down, 0), (Up, bottom)] {
                 for j in 0..n_cols {
-                    self.ray_trace_imp(i, j, dir, Rc::clone(&grid), Rc::clone(&states));
-                    let total = grid
+                    self.ray_trace_imp(i, j, dir, Rc::clone(&states));
+                    let total = states
                         .borrow()
                         .inner
                         .iter()
-                        .fold(0usize, |acc, x| acc + *x as usize);
+                        .fold(0usize, |acc, x| acc + x.any() as usize);
                     mx = mx.max(total);
                 }
             }
@@ -201,8 +182,7 @@ impl fmt::Display for Contraption {
 /*
 Yes, we could implement this 16-state wonder on a `u8`, but
 for ease of use we'll allow 3 more bytes.
- */
-
+*/
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Mark {
     up: bool,
@@ -219,49 +199,61 @@ impl Mark {
             Right => self.right = true,
         }
     }
+    #[inline]
     pub fn reset(&mut self) {
         self.up = false;
         self.down = false;
         self.left = false;
         self.right = false;
     }
-    // pub fn test_and_set(&mut self, dir: Direction) -> bool {
-    //     match dir {
-    //         Up => {
-    //             if self.up {
-    //                 true
-    //             } else {
-    //                 self.up = true;
-    //                 false
-    //             }
-    //         }
-    //         Down => {
-    //             if self.down {
-    //                 true
-    //             } else {
-    //                 self.down = true;
-    //                 false
-    //             }
-    //         }
-    //         Left => {
-    //             if self.left {
-    //                 true
-    //             } else {
-    //                 self.left = true;
-    //                 false
-    //             }
-    //         }
-    //         Right => {
-    //             if self.right {
-    //                 true
-    //             } else {
-    //                 self.right = true;
-    //                 false
-    //             }
-    //         }
-    //     }
-    // }
+    #[inline]
+    pub fn any(&self) -> bool {
+        self.up | self.down | self.left | self.right
+    }
 }
+
+/*
+The `u8` impl would be:
+
+const UP: u8 = 0x08;
+const DOWN: u8 = 0x04;
+const LEFT: u8 = 0x02;
+const RIGHT: u8 = 0x01;
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Mark(u8);
+impl Mark {
+pub fn is_up(&self) -> bool {
+self.0 & UP == UP
+    }
+    pub fn is_down(&self) -> bool {
+        self.0 & DOWN == DOWN
+    }
+    pub fn is_left(&self) -> bool {
+        self.0 & LEFT == LEFT
+    }
+    pub fn is_right(&self) -> bool {
+        self.0 & RIGHT == RIGHT
+    }
+    pub fn set_up(&mut self) {
+        self.0 |= UP
+    }
+    pub fn set_down(&mut self) {
+        self.0 |= DOWN
+    }
+    pub fn set_left(&mut self) {
+        self.0 |= LEFT
+    }
+    pub fn set_right(&mut self) {
+        self.0 |= RIGHT
+    }
+    pub fn any(&self) -> bool {
+        self.0 != 0
+    }
+    pub fn reset(&mut self) {
+        self.0 = 0;
+    }
+}
+*/
 
 /*
 
@@ -319,7 +311,6 @@ pub struct Tracer<'a> {
     current: (usize, usize),
     dir: Direction,
     layout: &'a Grid<Elem>,
-    energized: Rc<RefCell<Grid<bool>>>,
     states: Rc<RefCell<Grid<Mark>>>,
 }
 impl Tracer<'_> {
@@ -358,7 +349,7 @@ impl Tracer<'_> {
         }
     }
     pub fn try_move(&mut self, dir: Direction) -> bool {
-        let state = match dir {
+        match dir {
             Up => {
                 self.dir = Up;
                 if self.states.borrow()[self.current].up {
@@ -395,12 +386,6 @@ impl Tracer<'_> {
                     self.move_right()
                 }
             }
-        };
-        if state {
-            self.energized.borrow_mut()[self.current] = true;
-            true
-        } else {
-            false
         }
     }
     pub fn advance(&mut self) -> (bool, Option<Tracer<'_>>) {
@@ -411,7 +396,6 @@ impl Tracer<'_> {
                     current: self.current.clone(),
                     dir: self.dir.clone(),
                     layout: &*self.layout,
-                    energized: Rc::clone(&self.energized),
                     states: Rc::clone(&self.states),
                 };
                 let rhs = if rhs.try_move(second) {
@@ -462,11 +446,11 @@ mod tests {
         assert_eq!(lhs, TEST);
     }
 
-    fn println_trace(grid: &Grid<bool>) {
+    fn println_trace(grid: &Grid<Mark>) {
         let (n_rows, n_cols) = grid.shape();
         for i in 0..n_rows {
             for j in 0..n_cols {
-                let c = if grid[(i, j)] { '#' } else { '.' };
+                let c = if grid[(i, j)].any() { '#' } else { '.' };
                 print!("{}", c);
             }
             print!("{}", '\n');
@@ -483,7 +467,10 @@ mod tests {
         let x = SIMPLE.parse::<Contraption>().unwrap();
         let grid = x.ray_trace();
         println_trace(&grid);
-        let energized = grid.inner.into_iter().fold(0u8, |acc, x| acc + x as u8);
+        let energized = grid
+            .inner
+            .into_iter()
+            .fold(0u8, |acc, x| acc + x.any() as u8);
         assert_eq!(energized, 4 + 2 + 5 + 2 + 4, "\n{}", x);
     }
     #[test]
@@ -491,7 +478,10 @@ mod tests {
         let x = TEST.parse::<Contraption>().unwrap();
         let grid = x.ray_trace();
         println_trace(&grid);
-        let energized = grid.inner.into_iter().fold(0u8, |acc, x| acc + x as u8);
+        let energized = grid
+            .inner
+            .into_iter()
+            .fold(0u8, |acc, x| acc + x.any() as u8);
         assert_eq!(energized, 46, "\n{}", x);
     }
 
