@@ -305,6 +305,21 @@ There is a simpler way to do this, namely, marking each element as having
 been traversed in a given direction. If we try to traverse the element
 in a direction which has already been marked, then we know we are about
 to embark on a cycle.
+
+Furthermore, there are additional improvements that can be made.
+First, one can store marks for redirection elements only, and build
+a collection of ((i, j), mark) dynamically, such that the total space
+requirement is O(n) where n is the number of redirection marks.
+For this particular problem, this is less convenient, as we wish to
+count the total number of elements visited, but, if one were interested
+in only the vertices, it would be useful.
+Second, if one knows in advance that the graph will be traversed multiple
+times (e.g. in solving an optimization problem), then the distance
+between vertices can be computed a single time for all, such that
+an actual walk of the coordinates is performed only once. However,
+this requires that one walk each direction for each redirection element;
+whether this is worthwhile is determined by the sparsity of the graph --
+increasing sparsity makes this more likely to be a beneficial tradeoff.
 */
 #[derive(Debug, Clone)]
 pub struct Tracer<'a> {
