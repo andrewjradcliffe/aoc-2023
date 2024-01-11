@@ -117,6 +117,30 @@ impl Contraption {
             .into_iter()
             .fold(0usize, |acc, x| acc + x as usize)
     }
+    pub fn ray_trace2(&self) -> Grid<bool> {
+        let (n_rows, n_cols) = self.0.shape();
+        let mut rhs = Grid::new_default(n_rows, n_cols);
+        rhs[(0, 0)] = true;
+        let grid = Rc::new(RefCell::new(rhs));
+        let states = Rc::new(RefCell::new(Grid::new_default(n_rows, n_cols)));
+        {
+            let mut tracer = Tracer2 {
+                current: (0, 0),
+                dir: Right,
+                layout: &self.0,
+                energized: Rc::clone(&grid),
+                states: Rc::clone(&states),
+            };
+            tracer.trace();
+        }
+        Rc::into_inner(grid).unwrap().into_inner()
+    }
+    pub fn count_energized2(&self) -> usize {
+        self.ray_trace2()
+            .inner
+            .into_iter()
+            .fold(0usize, |acc, x| acc + x as usize)
+    }
 }
 
 impl FromStr for Contraption {
@@ -271,6 +295,187 @@ impl Tracer<'_> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Tracer2<'a> {
+    current: (usize, usize),
+    dir: Direction,
+    layout: &'a Grid<Elem>,
+    energized: Rc<RefCell<Grid<bool>>>,
+    states: Rc<RefCell<Grid<Mark>>>,
+}
+impl Tracer2<'_> {
+    pub fn move_up(&mut self) -> bool {
+        if self.current.0 != 0 {
+            self.current.0 -= 1;
+            true
+        } else {
+            false
+        }
+    }
+    pub fn move_down(&mut self) -> bool {
+        let new = self.current.0 + 1;
+        if new < self.layout.n_rows() {
+            self.current.0 = new;
+            true
+        } else {
+            false
+        }
+    }
+    pub fn move_left(&mut self) -> bool {
+        if self.current.1 != 0 {
+            self.current.1 -= 1;
+            true
+        } else {
+            false
+        }
+    }
+    pub fn move_right(&mut self) -> bool {
+        let new = self.current.1 + 1;
+        if new < self.layout.n_cols() {
+            self.current.1 = new;
+            true
+        } else {
+            false
+        }
+    }
+    pub fn try_move(&mut self, dir: Direction) -> bool {
+        let state = match dir {
+            Up => {
+                self.dir = Up;
+                if self.states.borrow()[self.current].up {
+                    false
+                } else {
+                    self.states.borrow_mut()[self.current].up = true;
+                    self.move_up()
+                }
+            }
+            Down => {
+                self.dir = Down;
+                if self.states.borrow()[self.current].down {
+                    false
+                } else {
+                    self.states.borrow_mut()[self.current].down = true;
+                    self.move_down()
+                }
+            }
+            Left => {
+                self.dir = Left;
+                if self.states.borrow()[self.current].left {
+                    false
+                } else {
+                    self.states.borrow_mut()[self.current].left = true;
+                    self.move_left()
+                }
+            }
+            Right => {
+                self.dir = Right;
+                if self.states.borrow()[self.current].right {
+                    false
+                } else {
+                    self.states.borrow_mut()[self.current].right = true;
+                    self.move_right()
+                }
+            }
+        };
+        if state {
+            self.energized.borrow_mut()[self.current] = true;
+            true
+        } else {
+            false
+        }
+    }
+    pub fn advance(&mut self) -> (bool, Option<Tracer2<'_>>) {
+        // Simple cycle detection using position and direction
+        match self.layout[self.current].redirect(self.dir) {
+            (first, Some(second)) => {
+                let mut rhs = Tracer2 {
+                    current: self.current.clone(),
+                    dir: self.dir.clone(),
+                    layout: &*self.layout,
+                    energized: Rc::clone(&self.energized),
+                    states: Rc::clone(&self.states),
+                };
+                let rhs = if rhs.try_move(second) {
+                    Some(rhs)
+                } else {
+                    None
+                };
+                (self.try_move(first), rhs)
+            }
+            (first, None) => (self.try_move(first), None),
+        }
+    }
+    pub fn trace(&mut self) {
+        loop {
+            match self.advance() {
+                (true, None) => (),
+                (false, None) => break,
+                (true, Some(mut branch)) => {
+                    branch.trace();
+                }
+                (false, Some(mut branch)) => {
+                    branch.trace();
+                    break;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Mark {
+    up: bool,
+    down: bool,
+    left: bool,
+    right: bool,
+}
+impl Mark {
+    pub fn mark(&mut self, dir: Direction) {
+        match dir {
+            Up => self.up = true,
+            Down => self.down = true,
+            Left => self.left = true,
+            Right => self.right = true,
+        }
+    }
+    // pub fn test_and_set(&mut self, dir: Direction) -> bool {
+    //     match dir {
+    //         Up => {
+    //             if self.up {
+    //                 true
+    //             } else {
+    //                 self.up = true;
+    //                 false
+    //             }
+    //         }
+    //         Down => {
+    //             if self.down {
+    //                 true
+    //             } else {
+    //                 self.down = true;
+    //                 false
+    //             }
+    //         }
+    //         Left => {
+    //             if self.left {
+    //                 true
+    //             } else {
+    //                 self.left = true;
+    //                 false
+    //             }
+    //         }
+    //         Right => {
+    //             if self.right {
+    //                 true
+    //             } else {
+    //                 self.right = true;
+    //                 false
+    //             }
+    //         }
+    //     }
+    // }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,7 +516,7 @@ mod tests {
     #[test]
     fn noncyclic_trace() {
         let x = SIMPLE.parse::<Contraption>().unwrap();
-        let grid = x.ray_trace();
+        let grid = x.ray_trace2();
         println_trace(&grid);
         let energized = grid.inner.into_iter().fold(0u8, |acc, x| acc + x as u8);
         assert_eq!(energized, 4 + 2 + 5 + 2 + 4, "\n{}", x);
@@ -319,7 +524,7 @@ mod tests {
     #[test]
     fn cyclic_trace() {
         let x = TEST.parse::<Contraption>().unwrap();
-        let grid = x.ray_trace();
+        let grid = x.ray_trace2();
         println_trace(&grid);
         let energized = grid.inner.into_iter().fold(0u8, |acc, x| acc + x as u8);
         assert_eq!(energized, 46, "\n{}", x);

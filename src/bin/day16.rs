@@ -6,7 +6,7 @@ fn main() {
     match args.nth(1) {
         Some(path) => match Contraption::from_path(path) {
             Ok(x) => {
-                let sum = x.count_energized();
+                let sum = x.count_energized2();
                 println!("{}", sum);
             }
             Err(e) => println!("{:#?}", e),
