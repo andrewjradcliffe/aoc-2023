@@ -89,32 +89,99 @@ pub struct Contraption(Grid<Elem>);
 
 impl Contraption {
     pub fn ray_trace(&self) -> Grid<bool> {
-        let (n_rows, n_cols) = self.0.shape();
-        let mut rhs = Grid::new_default(n_rows, n_cols);
-        rhs[(0, 0)] = true;
-        let grid = Rc::new(RefCell::new(rhs));
-        let states = Rc::new(RefCell::new(Grid::new_default(n_rows, n_cols)));
-        {
-            let mut tracer = Tracer {
-                current: (0, 0),
-                dir: Right,
-                layout: &self.0,
-                energized: Rc::clone(&grid),
-                states: Rc::clone(&states),
-            };
-            tracer.trace();
+        if self.0.len() == 0 {
+            Grid::new_default(0, 0)
+        } else {
+            let (n_rows, n_cols) = self.0.shape();
+            let mut rhs = Grid::new_default(n_rows, n_cols);
+            rhs[(0, 0)] = true;
+            let grid = Rc::new(RefCell::new(rhs));
+            let states = Rc::new(RefCell::new(Grid::new_default(n_rows, n_cols)));
+            {
+                let mut tracer = Tracer {
+                    current: (0, 0),
+                    dir: Right,
+                    layout: &self.0,
+                    energized: Rc::clone(&grid),
+                    states: Rc::clone(&states),
+                };
+                tracer.trace();
+            }
+            Rc::into_inner(grid).unwrap().into_inner()
         }
-        Rc::into_inner(grid).unwrap().into_inner()
     }
     pub fn from_path<T: AsRef<Path>>(path: T) -> Result<Self, String> {
         let s = fs::read_to_string(path).map_err(|e| e.to_string())?;
         s.parse::<Self>()
     }
     pub fn count_energized(&self) -> usize {
-        self.ray_trace()
+        if self.0.len() == 0 {
+            0
+        } else {
+            self.ray_trace()
+                .inner
+                .into_iter()
+                .fold(0usize, |acc, x| acc + x as usize)
+        }
+    }
+    fn ray_trace_imp(
+        &self,
+        i: usize,
+        j: usize,
+        dir: Direction,
+        energized: Rc<RefCell<Grid<bool>>>,
+        states: Rc<RefCell<Grid<Mark>>>,
+    ) {
+        energized
+            .borrow_mut()
             .inner
-            .into_iter()
-            .fold(0usize, |acc, x| acc + x as usize)
+            .iter_mut()
+            .for_each(|x| *x = false);
+        states.borrow_mut().inner.iter_mut().for_each(|x| x.reset());
+        energized.borrow_mut()[(i, j)] = true;
+        let mut tracer = Tracer {
+            current: (i, j),
+            dir,
+            layout: &self.0,
+            energized,
+            states,
+        };
+        tracer.trace();
+    }
+    pub fn maximum_energized(&self) -> usize {
+        if self.0.len() == 0 {
+            0
+        } else {
+            let (n_rows, n_cols) = self.0.shape();
+            let grid = Rc::new(RefCell::new(Grid::new_default(n_rows, n_cols)));
+            let states = Rc::new(RefCell::new(Grid::new_default(n_rows, n_cols)));
+            let mut mx: usize = 0;
+            let right = n_cols - 1;
+            let bottom = n_rows - 1;
+            for (dir, j) in [(Right, 0), (Left, right)] {
+                for i in 0..n_rows {
+                    self.ray_trace_imp(i, j, dir, Rc::clone(&grid), Rc::clone(&states));
+                    let total = grid
+                        .borrow()
+                        .inner
+                        .iter()
+                        .fold(0usize, |acc, x| acc + *x as usize);
+                    mx = mx.max(total);
+                }
+            }
+            for (dir, i) in [(Down, 0), (Up, bottom)] {
+                for j in 0..n_cols {
+                    self.ray_trace_imp(i, j, dir, Rc::clone(&grid), Rc::clone(&states));
+                    let total = grid
+                        .borrow()
+                        .inner
+                        .iter()
+                        .fold(0usize, |acc, x| acc + *x as usize);
+                    mx = mx.max(total);
+                }
+            }
+            mx
+        }
     }
 }
 
@@ -131,6 +198,11 @@ impl fmt::Display for Contraption {
     }
 }
 
+/*
+Yes, we could implement this 16-state wonder on a `u8`, but
+for ease of use we'll allow 3 more bytes.
+ */
+
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Mark {
     up: bool,
@@ -146,6 +218,12 @@ impl Mark {
             Left => self.left = true,
             Right => self.right = true,
         }
+    }
+    pub fn reset(&mut self) {
+        self.up = false;
+        self.down = false;
+        self.left = false;
+        self.right = false;
     }
     // pub fn test_and_set(&mut self, dir: Direction) -> bool {
     //     match dir {
@@ -415,5 +493,11 @@ mod tests {
         println_trace(&grid);
         let energized = grid.inner.into_iter().fold(0u8, |acc, x| acc + x as u8);
         assert_eq!(energized, 46, "\n{}", x);
+    }
+
+    #[test]
+    fn maximum_energized() {
+        let x = TEST.parse::<Contraption>().unwrap();
+        assert_eq!(x.maximum_energized(), 51);
     }
 }

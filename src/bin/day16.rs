@@ -8,6 +8,8 @@ fn main() {
             Ok(x) => {
                 let sum = x.count_energized();
                 println!("{}", sum);
+                let max = x.maximum_energized();
+                println!("{}", max);
             }
             Err(e) => println!("{:#?}", e),
         },
