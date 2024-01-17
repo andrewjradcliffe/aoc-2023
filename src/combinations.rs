@@ -33,7 +33,8 @@ pub fn binomial(n: u64, k: u64) -> u64 {
     if n < k {
         0
     } else {
-        let mut m = n - k;
+        let m = n - k;
+        let (mut m, k) = if k < m { (m, k) } else { (k, m) };
         let mut p = 1;
         let mut i: u64 = 0;
         while i < k {
@@ -139,23 +140,21 @@ impl Combinations {
         } else {
             let mut s: usize = 0;
             let mut j: usize = self.k - 1;
-            let mut i: usize = 1;
-            let e = self.digits[j] - self.digits[j - 1] - 1;
-            j -= 1;
+            let mut i: usize = 0;
             let mut d_i = self.digits[j];
             let last = self.k - 1;
             while i < last {
-                let d_i_1 = self.digits[j - 1];
+                j -= 1;
+                i += 1;
+                let d_i_1 = self.digits[j];
                 if d_i_1 != d_i {
-                    s += binomial((self.n - d_i) as u64, (i + 1) as u64) as usize;
+                    s += binomial((self.n - d_i) as u64, i as u64) as usize;
                     d_i = d_i_1 + 1;
                 } else {
                     d_i = d_i_1;
                 }
-                j -= 1;
-                i += 1;
             }
-            s + binomial((self.n - d_i) as u64, self.k as u64) as usize - e
+            s + binomial((self.n - d_i) as u64, self.k as u64) as usize
         }
     }
     pub fn linear_index(&self) -> usize {
@@ -166,45 +165,22 @@ impl Combinations {
         } else {
             let mut s: usize = 0;
             let mut j: usize = self.k - 1;
-            let mut i: usize = 1;
-            let e = self.digits[j] - self.digits[j - 1] - 1;
-            j -= 1;
+            let mut i: usize = 0;
             let mut d_i = self.digits[j];
             let last = self.k - 1;
+            let n_minus_1 = self.n - 1;
             while i < last {
-                let d_i_1 = self.digits[j - 1];
-                if d_i_1 != d_i {
-                    s += binomial((self.n - 1 - d_i_1) as u64, (i + 1) as u64) as usize
-                        - binomial((self.n - d_i) as u64, (i + 1) as u64) as usize;
-                }
-                d_i = d_i_1;
                 j -= 1;
                 i += 1;
+                let d_i_1 = self.digits[j];
+                if d_i_1 != d_i {
+                    s += binomial((n_minus_1 - d_i_1) as u64, i as u64) as usize
+                        - binomial((self.n - d_i) as u64, i as u64) as usize;
+                }
+                d_i = d_i_1;
             }
             s + binomial(self.n as u64, self.k as u64) as usize
                 - binomial((self.n - self.digits[0]) as u64, self.k as u64) as usize
-                + e
-            // let j = self.k - 1;
-            // let e = self.digits[j] - self.digits[j - 1] - 1;
-            // let mut d_i = self.digits[j - 1];
-            // let s: usize = self.digits[..j - 1]
-            //     .iter()
-            //     .rev()
-            //     .zip(1..)
-            //     .map(|(d_i_1, i)| {
-            //         let x = if *d_i_1 != d_i {
-            //             binomial((self.n - 1 - *d_i_1) as u64, i + 1) as usize
-            //                 - binomial((self.n - d_i) as u64, i + 1) as usize
-            //         } else {
-            //             0
-            //         };
-            //         d_i = *d_i_1;
-            //         x
-            //     })
-            //     .sum();
-            // s + binomial(self.n as u64, self.k as u64) as usize
-            //     - binomial((self.n - self.digits[0]) as u64, self.k as u64) as usize
-            //     + e
         }
     }
 }
