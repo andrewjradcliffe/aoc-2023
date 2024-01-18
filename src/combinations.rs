@@ -183,6 +183,31 @@ impl Combinations {
                 - binomial((self.n - self.digits[0]) as u64, self.k as u64) as usize
         }
     }
+    pub fn combinatorial_index(&self, l: usize) -> Vec<usize> {
+        let mut digits = Vec::with_capacity(self.k);
+        digits.resize(self.k, 0);
+        if self.k != 0 {
+            let mut l = l;
+            let mut j: usize = 0;
+            let mut i = (self.k - 1) as u64;
+            let n_minus_1 = self.n - 1;
+            while i != 0 {
+                let mut d_i = digits[j];
+                let mut b = binomial((n_minus_1 - d_i) as u64, i) as usize;
+                while l >= b {
+                    l -= b;
+                    d_i += 1;
+                    b = binomial((n_minus_1 - d_i) as u64, i) as usize;
+                }
+                digits[j] = d_i;
+                digits[j + 1] = d_i + 1;
+                i -= 1;
+                j += 1;
+            }
+            digits[self.k - 1] += l;
+        }
+        digits
+    }
 }
 impl Iterator for Combinations {
     type Item = Vec<usize>;
@@ -201,6 +226,7 @@ mod tests {
         assert_eq!(binomial(3, 4), 0);
         assert_eq!(binomial(7, 17), 0);
         assert_eq!(binomial(5, 0), 1);
+        assert_eq!(binomial(2, 1), 2);
         assert_eq!(binomial(7, 3), 35);
         assert_eq!(binomial(50, 11), 37353738800);
         assert_eq!(binomial(61, 30), 232714176627630544);
@@ -306,13 +332,48 @@ mod tests {
     }
     #[test]
     fn linear_index() {
+        let mut x = Combinations::new(6, 4);
+        for n in 0..16 {
+            assert_eq!(x.linear_index(), n);
+            x.next_combination_mut();
+        }
         let mut x = Combinations::new(7, 4);
         for n in 0..36 {
-            x.reset();
-            for _ in 0..n {
-                x.next_combination_mut();
-            }
             assert_eq!(x.linear_index(), n);
+            x.next_combination_mut();
+        }
+        let mut x = Combinations::new(8, 4);
+        for n in 0..71 {
+            assert_eq!(x.linear_index(), n);
+            x.next_combination_mut();
+        }
+        for n in 1..10 {
+            for k in 1..n {
+                let mut x = Combinations::new(n, k);
+                let end = binomial(n as u64, k as u64) as usize;
+                for i in 0..end {
+                    assert_eq!(x.linear_index(), i);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn combinatorial_index() {
+        let x = Combinations::new(7, 4);
+        assert_eq!(x.combinatorial_index(9), vec![0, 1, 5, 6]);
+        assert_eq!(x.combinatorial_index(17), vec![0, 3, 4, 6]);
+        assert_eq!(x.combinatorial_index(27), vec![1, 3, 4, 6]);
+        assert_eq!(x.combinatorial_index(34), vec![3, 4, 5, 6]);
+        for n in 1..10 {
+            for k in 1..n {
+                let mut x = Combinations::new(n, k);
+                let end = binomial(n as u64, k as u64) as usize;
+                for i in 0..end {
+                    assert_eq!(x.combinatorial_index(i), x.digits);
+                    x.next_combination_mut();
+                }
+            }
         }
     }
 }
