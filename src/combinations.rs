@@ -44,15 +44,6 @@ pub fn binomial(n: u64, k: u64) -> u64 {
         }
         p
     }
-    // let mut m = n.wrapping_sub(k);
-    // let mut p = 1;
-    // let mut i: u64 = 0;
-    // while i < k {
-    //     i = i.wrapping_add(1);
-    //     m = m.wrapping_add(1);
-    //     p = m.wrapping_mul(p).wrapping_div(i);
-    // }
-    // p
 }
 
 /*
@@ -66,22 +57,29 @@ pub struct Combinations {
     initial: bool,
 }
 impl Combinations {
-    /// Panics if `k > n`.
     pub fn new(n: usize, k: usize) -> Self {
-        assert!(k <= n);
-        let mut digits = Vec::with_capacity(k);
-        for i in 0..k {
-            digits.push(i);
-        }
+        let initial = k <= n;
+        let digits = if initial {
+            let mut digits = Vec::with_capacity(k);
+            for i in 0..k {
+                digits.push(i);
+            }
+            digits
+        } else {
+            Vec::new()
+        };
         Self {
             n,
             k,
             digits,
-            initial: true,
+            initial,
         }
     }
+    #[inline]
     pub fn is_done(&self) -> bool {
-        self.k == 0 || self.n == 0 || self.digits[0] > self.n - self.k
+        self.k > self.n
+            || (self.k == 0) & !self.initial
+            || (self.k != 0 && self.digits[0] > self.n - self.k)
     }
     /*
     This will never overflow as the maximum value of `n` is `usize::MAX`, and
@@ -90,6 +88,7 @@ impl Combinations {
     N.B. the maximum value of `len + j` is `n - k + 1 + (k - 1) = n`.
      */
     pub fn next_combination_mut(&mut self) {
+        self.initial = false;
         if self.is_done() {
             return ();
         }
@@ -106,28 +105,21 @@ impl Combinations {
             j += 1;
         }
     }
+    /// Equivalent to `next` method on an `Iterator`.
     pub fn next_combination(&mut self) -> Option<Vec<usize>> {
-        if self.initial {
-            self.initial = false;
-            Some(self.digits.clone())
-        } else if self.is_done() {
+        if self.is_done() {
             None
         } else {
+            let d = self.digits.clone();
             self.next_combination_mut();
-            if self.is_done() {
-                None
-            } else {
-                Some(self.digits.clone())
-            }
+            Some(d)
         }
     }
     pub fn reset(&mut self) {
-        self.initial = true;
-        // self.digits.iter_mut().enumerate().for_each(|(i, v)| *v = i);
-        for i in 0..self.k {
-            self.digits[i] = i;
-        }
+        self.initial = self.k <= self.n;
+        self.digits.iter_mut().enumerate().for_each(|(i, v)| *v = i);
     }
+
     pub fn count_remaining(&self) -> usize {
         if self.k == 0 {
             if self.initial {
@@ -135,6 +127,8 @@ impl Combinations {
             } else {
                 0
             }
+        } else if self.k > self.n {
+            0
         } else if self.k == 1 {
             self.n - self.digits[0]
         } else {
@@ -157,11 +151,17 @@ impl Combinations {
             s + binomial((self.n - d_i) as u64, self.k as u64) as usize
         }
     }
-    pub fn linear_index(&self) -> usize {
+    pub fn linear_index(&self) -> Option<usize> {
         if self.k == 0 {
-            0
+            if self.initial {
+                Some(0)
+            } else {
+                None
+            }
+        } else if self.k > self.n || self.digits[0] > self.n - self.k {
+            None
         } else if self.k == 1 {
-            self.digits[0]
+            Some(self.digits[0])
         } else {
             let mut s: usize = 0;
             let mut j: usize = self.k - 1;
@@ -179,34 +179,45 @@ impl Combinations {
                 }
                 d_i = d_i_1;
             }
-            s + binomial(self.n as u64, self.k as u64) as usize
-                - binomial((self.n - self.digits[0]) as u64, self.k as u64) as usize
+            s += binomial(self.n as u64, self.k as u64) as usize
+                - binomial((self.n - self.digits[0]) as u64, self.k as u64) as usize;
+            Some(s)
         }
     }
-    pub fn combinatorial_index(&self, l: usize) -> Vec<usize> {
-        let mut digits = Vec::with_capacity(self.k);
-        digits.resize(self.k, 0);
-        if self.k != 0 {
-            let mut l = l;
-            let mut j: usize = 0;
-            let mut i = (self.k - 1) as u64;
-            let n_minus_1 = self.n - 1;
-            while i != 0 {
-                let mut d_i = digits[j];
-                let mut b = binomial((n_minus_1 - d_i) as u64, i) as usize;
-                while l >= b {
-                    l -= b;
-                    d_i += 1;
-                    b = binomial((n_minus_1 - d_i) as u64, i) as usize;
-                }
-                digits[j] = d_i;
-                digits[j + 1] = d_i + 1;
-                i -= 1;
-                j += 1;
+    pub fn combinatorial_index(&self, l: usize) -> Option<Vec<usize>> {
+        if self.k == 0 {
+            if self.initial {
+                Some(Vec::new())
+            } else {
+                None
             }
-            digits[self.k - 1] += l;
+        } else if self.k > self.n {
+            Some(Vec::new())
+        } else {
+            let mut digits = Vec::with_capacity(self.k);
+            digits.resize(self.k, 0);
+            if self.k != 0 {
+                let mut l = l;
+                let mut j: usize = 0;
+                let mut i = (self.k - 1) as u64;
+                let n_minus_1 = self.n - 1;
+                while i != 0 {
+                    let mut d_i = digits[j];
+                    let mut b = binomial((n_minus_1 - d_i) as u64, i) as usize;
+                    while l >= b {
+                        l -= b;
+                        d_i += 1;
+                        b = binomial((n_minus_1 - d_i) as u64, i) as usize;
+                    }
+                    digits[j] = d_i;
+                    digits[j + 1] = d_i + 1;
+                    i -= 1;
+                    j += 1;
+                }
+                digits[self.k - 1] += l;
+            }
+            Some(digits)
         }
-        digits
     }
 }
 impl Iterator for Combinations {
@@ -329,30 +340,59 @@ mod tests {
         }
         assert_eq!(x.count_remaining(), 0);
         assert_eq!(x.digits, vec![4, 5, 6, 7]);
+
+        let mut x = Combinations::new(0, 0);
+        assert_eq!(x.count_remaining(), 1);
+        assert_eq!(x.next(), Some(vec![]));
+        assert_eq!(x.count_remaining(), 0);
+        let mut x = Combinations::new(0, 1);
+        assert_eq!(x.count_remaining(), 0);
+        assert_eq!(x.next(), None);
     }
     #[test]
     fn linear_index() {
         let mut x = Combinations::new(6, 4);
-        for n in 0..16 {
-            assert_eq!(x.linear_index(), n);
+        for n in 0..15 {
+            assert_eq!(x.linear_index(), Some(n));
             x.next_combination_mut();
         }
         let mut x = Combinations::new(7, 4);
-        for n in 0..36 {
-            assert_eq!(x.linear_index(), n);
+        for n in 0..35 {
+            assert_eq!(x.linear_index(), Some(n));
             x.next_combination_mut();
         }
         let mut x = Combinations::new(8, 4);
-        for n in 0..71 {
-            assert_eq!(x.linear_index(), n);
+        for n in 0..70 {
+            assert_eq!(x.linear_index(), Some(n));
             x.next_combination_mut();
         }
-        for n in 1..10 {
-            for k in 1..n {
+        // Some edge cases
+        let mut x = Combinations::new(0, 0);
+        assert_eq!(x.linear_index(), Some(0));
+        x.next_combination_mut();
+        assert_eq!(x.linear_index(), None);
+
+        let mut x = Combinations::new(0, 1);
+        assert_eq!(x.linear_index(), None);
+        x.next_combination_mut();
+        assert_eq!(x.linear_index(), None);
+
+        let mut x = Combinations::new(1, 1);
+        assert_eq!(x.linear_index(), Some(0));
+        x.next_combination_mut();
+        assert_eq!(x.linear_index(), None);
+
+        let mut x = Combinations::new(3, 5);
+        assert_eq!(x.linear_index(), None);
+        x.next_combination_mut();
+        assert_eq!(x.linear_index(), None);
+        for n in 0..10 {
+            for k in 0..n + 1 {
                 let mut x = Combinations::new(n, k);
                 let end = binomial(n as u64, k as u64) as usize;
                 for i in 0..end {
-                    assert_eq!(x.linear_index(), i);
+                    assert_eq!(x.linear_index(), Some(i));
+                    x.next_combination_mut();
                 }
             }
         }
@@ -361,16 +401,16 @@ mod tests {
     #[test]
     fn combinatorial_index() {
         let x = Combinations::new(7, 4);
-        assert_eq!(x.combinatorial_index(9), vec![0, 1, 5, 6]);
-        assert_eq!(x.combinatorial_index(17), vec![0, 3, 4, 6]);
-        assert_eq!(x.combinatorial_index(27), vec![1, 3, 4, 6]);
-        assert_eq!(x.combinatorial_index(34), vec![3, 4, 5, 6]);
-        for n in 1..10 {
-            for k in 1..n {
+        assert_eq!(x.combinatorial_index(9).unwrap(), vec![0, 1, 5, 6]);
+        assert_eq!(x.combinatorial_index(17).unwrap(), vec![0, 3, 4, 6]);
+        assert_eq!(x.combinatorial_index(27).unwrap(), vec![1, 3, 4, 6]);
+        assert_eq!(x.combinatorial_index(34).unwrap(), vec![3, 4, 5, 6]);
+        for n in 0..10 {
+            for k in 0..n + 1 {
                 let mut x = Combinations::new(n, k);
                 let end = binomial(n as u64, k as u64) as usize;
                 for i in 0..end {
-                    assert_eq!(x.combinatorial_index(i), x.digits);
+                    assert_eq!(x.combinatorial_index(i).unwrap(), x.digits);
                     x.next_combination_mut();
                 }
             }
